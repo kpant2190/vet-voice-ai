@@ -1,18 +1,5 @@
 """Main FastAPI application."""
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import uvicorn
-
-from .core.config import settings
-from .core.database import create_tables
-from .api.voice import router as voice_router
-from .api.sms import router as sms_router
-from .api.appointments import router as appointments_router
-from .api.clinics import router as clinics_router
-"""Main FastAPI application."""
-
 from fastapi import FastAPI, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -83,6 +70,17 @@ app.include_router(
     prefix=f"{settings.API_V1_STR}/clinics",
     tags=["clinics"]
 )
+
+# Health check endpoint for Railway
+@app.get("/")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "AI Veterinary Receptionist"}
+
+@app.get("/health")
+async def health():
+    """Alternative health check endpoint."""
+    return {"status": "ok", "message": "Service is running"}
 
 # Test webhook for debugging
 @app.post("/test-webhook")
