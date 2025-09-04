@@ -14,28 +14,28 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", 8000))
     
     # Security
-    SECRET_KEY: str
+    SECRET_KEY: str = "temp_secret_key_change_in_production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/vet_voice_ai"
     POSTGRES_USER: Optional[str] = None
     POSTGRES_PASSWORD: Optional[str] = None
     POSTGRES_DB: Optional[str] = None
     
     # API Keys
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str = "temp_openai_key"
     ANTHROPIC_API_KEY: Optional[str] = None
-    ELEVENLABS_API_KEY: str
+    ELEVENLABS_API_KEY: str = "temp_elevenlabs_key"
     
     # Twilio Configuration
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    TWILIO_PHONE_NUMBER: str
+    TWILIO_ACCOUNT_SID: str = "temp_twilio_sid"
+    TWILIO_AUTH_TOKEN: str = "temp_twilio_token"
+    TWILIO_PHONE_NUMBER: str = "+1234567890"
     
     # Voice Settings
-    DEFAULT_VOICE_ID: str
+    DEFAULT_VOICE_ID: str = "temp_voice_id"
     SPEECH_MODEL: str = "whisper-1"
     
     # LLM Settings
