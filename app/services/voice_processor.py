@@ -4,7 +4,7 @@ import io
 import asyncio
 from typing import Optional, BinaryIO
 import openai
-from elevenlabs import ElevenLabs
+from elevenlabs import generate, set_api_key
 from ..core.config import settings
 
 
@@ -14,7 +14,8 @@ class VoiceProcessor:
     def __init__(self):
         """Initialize the voice processor."""
         self.openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.elevenlabs_client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        # Set ElevenLabs API key globally
+        set_api_key(settings.ELEVENLABS_API_KEY)
         
     async def speech_to_text(self, audio_file: BinaryIO) -> str:
         """Convert speech to text using OpenAI Whisper."""
@@ -41,8 +42,8 @@ class VoiceProcessor:
             # Use provided voice_id or default
             voice_id = voice_id or settings.DEFAULT_VOICE_ID
             
-            # Generate audio using the new ElevenLabs API
-            audio = self.elevenlabs_client.generate(
+            # Generate audio using the ElevenLabs generate function
+            audio = generate(
                 text=text,
                 voice=voice_id,
                 model="eleven_monolingual_v1"
