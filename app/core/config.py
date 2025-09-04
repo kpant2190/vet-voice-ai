@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # Database
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/vet_voice_ai"
+    # Database - Railway automatically provides DATABASE_URL
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/vet_voice_ai")
     POSTGRES_USER: Optional[str] = None
     POSTGRES_PASSWORD: Optional[str] = None
     POSTGRES_DB: Optional[str] = None
@@ -71,14 +71,14 @@ def get_settings():
         print("Using fallback settings...")
         # Return settings with minimal configuration for Railway startup
         return Settings(
-            SECRET_KEY="temp_secret_key_change_in_production",
-            DATABASE_URL="postgresql://postgres:password@localhost:5432/vet_voice_ai",
-            OPENAI_API_KEY="temp_openai_key",
-            ELEVENLABS_API_KEY="temp_elevenlabs_key",
-            TWILIO_ACCOUNT_SID="temp_twilio_sid",
-            TWILIO_AUTH_TOKEN="temp_twilio_token",
-            TWILIO_PHONE_NUMBER="+1234567890",
-            DEFAULT_VOICE_ID="temp_voice_id"
+            SECRET_KEY=os.getenv("SECRET_KEY", "temp_secret_key_change_in_production"),
+            DATABASE_URL=os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/vet_voice_ai"),
+            OPENAI_API_KEY=os.getenv("OPENAI_API_KEY", "temp_openai_key"),
+            ELEVENLABS_API_KEY=os.getenv("ELEVENLABS_API_KEY", "temp_elevenlabs_key"),
+            TWILIO_ACCOUNT_SID=os.getenv("TWILIO_ACCOUNT_SID", "temp_twilio_sid"),
+            TWILIO_AUTH_TOKEN=os.getenv("TWILIO_AUTH_TOKEN", "temp_twilio_token"),
+            TWILIO_PHONE_NUMBER=os.getenv("TWILIO_PHONE_NUMBER", "+1234567890"),
+            DEFAULT_VOICE_ID=os.getenv("DEFAULT_VOICE_ID", "temp_voice_id")
         )
 
 

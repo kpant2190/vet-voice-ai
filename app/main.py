@@ -124,8 +124,15 @@ async def ultra_simple_webhook():
 @app.on_event("startup")
 async def startup_event():
     """Application startup event."""
-    # Create database tables
-    create_tables()
+    try:
+        # Create database tables
+        create_tables()
+        print(f"✅ Database tables created successfully!")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not create database tables: {e}")
+        print("🔄 Application will continue without database initialization...")
+        print("📝 Please check your DATABASE_URL environment variable")
+    
     print(f"🚀 {settings.PROJECT_NAME} started successfully!")
     print(f"📊 API Documentation: http://localhost:8000/docs")
     print(f"🔗 Twilio Webhook URL: http://your-domain.com{settings.API_V1_STR}/voice/webhook")
