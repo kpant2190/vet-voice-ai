@@ -29,7 +29,6 @@ llm_service = LLMService()
 @router.post("/webhook")
 async def voice_webhook(
     request: Request,
-    db: Session = Depends(get_db),
     CallSid: str = Form(...),
     From: str = Form(...),
     To: str = Form(...),
@@ -37,22 +36,43 @@ async def voice_webhook(
     SpeechResult: Optional[str] = Form(None),
     Confidence: Optional[float] = Form(None)
 ):
-    """Handle incoming Twilio voice webhooks with optimized response time."""
+    """Handle incoming Twilio voice webhooks with database fallback."""
+    
+    print(f"📞 Webhook: {CallSid} from {From} to {To} status {CallStatus}")
     
     try:
-        # Fast response for Twilio - handle core logic first
+        # Quick response without database dependency for initial call
         if CallStatus == "ringing":
-            # Quick clinic lookup with timeout protection
+            # Immediate response - no database lookup needed for basic greeting
+            if To == "+61468017757":  # Our configured number
+                greeting = "Hello! Thank you for calling AI Veterinary Clinic. I'm your AI assistant. How can I help you and your pet today?"
+            else:
+                greeting = "Hello! Thank you for calling. How can I help you today?"
+            
+            twiml = twilio_service.create_gather_response(
+                greeting,
+                f"/api/voice/process?call_sid={CallSid}"
+            )
+            
+            # Try to log to database asynchronously (don't wait for it)
             try:
+                from ..core.database import get_db
+                db = next(get_db())
+                
+                # Quick clinic check
                 clinic = db.query(Clinic).filter(Clinic.phone_number == To).first()
                 if not clinic:
-                    # Fast fallback response
-                    twiml = twilio_service.create_hangup_response(
-                        "I'm sorry, this number is not configured for voice services."
+                    # Create a default clinic entry for this number
+                    clinic = Clinic(
+                        name="AI Veterinary Clinic",
+                        phone_number=To,
+                        email="contact@aivet.com",
+                        voice_greeting=greeting
                     )
-                    return Response(content=twiml, media_type="application/xml")
+                    db.add(clinic)
+                    db.commit()
                 
-                # Create minimal call log entry quickly
+                # Quick call log entry
                 call_log = CallLog(
                     clinic_id=clinic.id,
                     twilio_call_sid=CallSid,
@@ -63,29 +83,20 @@ async def voice_webhook(
                 )
                 db.add(call_log)
                 db.commit()
+                db.close()
                 
-                # Quick greeting response
-                greeting = clinic.voice_greeting or f"Hello! Thank you for calling {clinic.name}. How can I help you today?"
-                twiml = twilio_service.create_gather_response(
-                    greeting,
-                    f"/api/voice/process?call_sid={CallSid}"
-                )
-                
-            except Exception as e:
-                print(f"❌ Database error in webhook: {e}")
-                # Fallback response without database
-                twiml = twilio_service.create_gather_response(
-                    "Hello! Thank you for calling. How can I help you today?",
-                    f"/api/voice/process?call_sid={CallSid}"
-                )
+            except Exception as db_error:
+                print(f"⚠️ Database logging failed (continuing anyway): {db_error}")
+            
+            return Response(content=twiml, media_type="application/xml")
             
         elif SpeechResult:
-            # For speech processing, use the lightweight process endpoint
+            # Process speech with lightweight handling
             twiml = await process_speech_lightweight(
                 speech_text=SpeechResult,
-                call_sid=CallSid,
-                db=db
+                call_sid=CallSid
             )
+            return Response(content=twiml, media_type="application/xml")
             
         else:
             # Fallback response
@@ -93,64 +104,83 @@ async def voice_webhook(
                 "I'm sorry, I didn't understand. Could you please repeat that?",
                 f"/api/voice/process?call_sid={CallSid}"
             )
-        
-        return Response(content=twiml, media_type="application/xml")
+            return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
         print(f"❌ Critical error in webhook: {e}")
-        # Emergency fallback response
-        emergency_twiml = twilio_service.create_hangup_response(
-            "I apologize, but I'm experiencing technical difficulties. Please call back in a moment or try our emergency line."
-        )
+        # Emergency fallback - always respond to Twilio
+        emergency_twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Hello! Thank you for calling AI Veterinary Clinic. I'm experiencing technical difficulties right now, but I want to help you. If this is an emergency, please hang up and call our emergency line. Otherwise, our staff will call you back within 10 minutes. Thank you for your patience.</Say>
+    <Hangup/>
+</Response>'''
         return Response(content=emergency_twiml, media_type="application/xml")
 
 
 async def process_speech_lightweight(
     speech_text: str,
-    call_sid: str,
-    db: Session
+    call_sid: str
 ) -> str:
-    """Lightweight speech processing for fast webhook response."""
+    """Lightweight speech processing for fast webhook response - no database required."""
+    
+    print(f"🎤 Processing speech: {speech_text}")
     
     try:
-        # Quick database lookup with timeout protection
-        call_log = db.query(CallLog).filter(CallLog.twilio_call_sid == call_sid).first()
-        if not call_log:
-            return twilio_service.create_hangup_response("Session expired. Please call back.")
+        # Basic keyword-based responses without heavy AI processing
+        speech_lower = speech_text.lower()
         
-        # Basic response without heavy LLM processing
-        if any(word in speech_text.lower() for word in ["emergency", "urgent", "help", "dying"]):
+        if any(word in speech_lower for word in ["emergency", "urgent", "dying", "collapsed", "bleeding", "poisoned"]):
             # Emergency response
-            response_text = "This sounds urgent. Let me connect you with our emergency service right away. Please hold."
-            twiml = twilio_service.create_hangup_response(response_text)
-        elif any(word in speech_text.lower() for word in ["appointment", "book", "schedule"]):
+            response_text = "This sounds like an emergency! I'm going to connect you with our emergency veterinary service right away. Please stay on the line."
+            twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">This sounds like an emergency! I'm going to connect you with our emergency veterinary service right away. Please stay on the line.</Say>
+    <Hangup/>
+</Response>'''
+            
+        elif any(word in speech_lower for word in ["appointment", "book", "schedule", "visit", "checkup"]):
             # Appointment response
-            response_text = "I'd be happy to help you schedule an appointment. Let me connect you with our booking system."
+            response_text = "I'd be happy to help you schedule an appointment for your pet. Let me check our availability."
+            twiml = twilio_service.create_gather_response(
+                "I'd be happy to help you schedule an appointment for your pet. What's your pet's name and what type of appointment do you need?",
+                f"/api/voice/process?call_sid={call_sid}"
+            )
+            
+        elif any(word in speech_lower for word in ["prescription", "medication", "refill", "medicine"]):
+            # Prescription response  
+            response_text = "I can help you with prescription refills. What medication does your pet need?"
+            twiml = twilio_service.create_gather_response(
+                "I can help you with prescription refills. What's your pet's name and which medication do you need refilled?",
+                f"/api/voice/process?call_sid={call_sid}"
+            )
+            
+        elif any(word in speech_lower for word in ["hours", "open", "closed", "time"]):
+            # Hours response
+            response_text = "We're open Monday through Saturday, 8 AM to 6 PM. Is there anything specific I can help you with?"
             twiml = twilio_service.create_gather_response(
                 response_text,
                 f"/api/voice/process?call_sid={call_sid}"
             )
+            
         else:
             # General response
-            response_text = "I understand. Let me help you with that. One moment please."
-            twiml = twilio_service.create_gather_response(
-                response_text,
-                f"/api/voice/process?call_sid={call_sid}"
-            )
-        
-        # Quick transcript update
-        call_log.transcript = f"{call_log.transcript or ''}\nUser: {speech_text}\nAI: {response_text}"
-        db.commit()
+            response_text = "I understand you need help with your pet. Let me connect you with our staff who can assist you further."
+            twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">I understand you need help with your pet. Let me connect you with our staff who can assist you further. Thank you for calling AI Veterinary Clinic!</Say>
+    <Hangup/>
+</Response>'''
         
         return twiml
         
     except Exception as e:
         print(f"❌ Error in lightweight processing: {e}")
         # Fallback response
-        return twilio_service.create_gather_response(
-            "I'm here to help. Could you please tell me what you need?",
-            f"/api/voice/process?call_sid={call_sid}"
-        )
+        return '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Thank you for calling AI Veterinary Clinic. Our staff will assist you shortly. Have a great day!</Say>
+    <Hangup/>
+</Response>'''
 
 
 @router.post("/process")
