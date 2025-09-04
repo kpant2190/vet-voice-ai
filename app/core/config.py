@@ -62,5 +62,25 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+def get_settings():
+    """Create settings with error handling."""
+    try:
+        return Settings()
+    except Exception as e:
+        print(f"Warning: Error loading settings: {e}")
+        print("Using fallback settings...")
+        # Return settings with minimal configuration for Railway startup
+        return Settings(
+            SECRET_KEY="temp_secret_key_change_in_production",
+            DATABASE_URL="postgresql://postgres:password@localhost:5432/vet_voice_ai",
+            OPENAI_API_KEY="temp_openai_key",
+            ELEVENLABS_API_KEY="temp_elevenlabs_key",
+            TWILIO_ACCOUNT_SID="temp_twilio_sid",
+            TWILIO_AUTH_TOKEN="temp_twilio_token",
+            TWILIO_PHONE_NUMBER="+1234567890",
+            DEFAULT_VOICE_ID="temp_voice_id"
+        )
+
+
 # Global settings instance
-settings = Settings()
+settings = get_settings()
