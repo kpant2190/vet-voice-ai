@@ -8,17 +8,21 @@ except ImportError:
 from sqlalchemy.orm import sessionmaker
 from .config import settings
 
-# Create database engine with better error handling
+# Create database engine with optimized settings for Railway
 try:
     engine = create_engine(
         settings.DATABASE_URL,
         echo=settings.DEBUG,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        # Add connection timeout and retry settings for Railway
+        # Optimized connection pool settings for Railway PostgreSQL
+        pool_size=5,                    # Smaller pool for webhook performance
+        max_overflow=10,                # Allow burst connections
+        pool_pre_ping=True,            # Test connections before use
+        pool_recycle=3600,             # Recycle connections every hour
+        # Faster connection timeouts for webhook responsiveness
         connect_args={
-            "connect_timeout": 60,
-            "application_name": "vet-voice-ai"
+            "connect_timeout": 10,      # Reduced from 60 to 10 seconds
+            "application_name": "vet-voice-ai",
+            "options": "-c statement_timeout=30s"  # 30 second query timeout
         }
     )
     print(f"🔗 Database engine created for: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'localhost'}")

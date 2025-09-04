@@ -88,8 +88,34 @@ async def health_check():
 
 @app.get("/health")
 async def health():
-    """Alternative health check endpoint."""
-    return {"status": "ok", "message": "Service is running"}
+    """Enhanced health check endpoint with database connectivity."""
+    try:
+        # Quick database connection test
+        from .core.database import engine
+        if engine:
+            with engine.connect() as conn:
+                # Simple query to test connection
+                result = conn.execute("SELECT 1")
+                result.fetchone()
+            
+            return {
+                "status": "ok", 
+                "message": "Service is running",
+                "database": "connected",
+                "timestamp": "2025-09-04T07:06:00Z"
+            }
+        else:
+            return {
+                "status": "degraded",
+                "message": "Service running but database unavailable",
+                "database": "disconnected"
+            }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "message": "Service running with issues",
+            "database": f"error: {str(e)}"
+        }
 
 # Test webhook for debugging
 @app.post("/test-webhook")

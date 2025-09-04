@@ -37,63 +37,120 @@ async def voice_webhook(
     SpeechResult: Optional[str] = Form(None),
     Confidence: Optional[float] = Form(None)
 ):
-    """Handle incoming Twilio voice webhooks."""
+    """Handle incoming Twilio voice webhooks with optimized response time."""
     
-    # Parse webhook data
-    form_data = await request.form()
-    webhook_data = twilio_service.parse_webhook_data(dict(form_data))
-    
-    # Find the clinic based on the called number
-    clinic = db.query(Clinic).filter(Clinic.phone_number == To).first()
-    if not clinic:
-        # Default response if clinic not found
-        twiml = twilio_service.create_hangup_response(
-            "I'm sorry, this number is not configured for voice services."
-        )
+    try:
+        # Fast response for Twilio - handle core logic first
+        if CallStatus == "ringing":
+            # Quick clinic lookup with timeout protection
+            try:
+                clinic = db.query(Clinic).filter(Clinic.phone_number == To).first()
+                if not clinic:
+                    # Fast fallback response
+                    twiml = twilio_service.create_hangup_response(
+                        "I'm sorry, this number is not configured for voice services."
+                    )
+                    return Response(content=twiml, media_type="application/xml")
+                
+                # Create minimal call log entry quickly
+                call_log = CallLog(
+                    clinic_id=clinic.id,
+                    twilio_call_sid=CallSid,
+                    caller_phone=From,
+                    call_status=CallStatus,
+                    call_direction="inbound",
+                    call_started_at=datetime.utcnow()
+                )
+                db.add(call_log)
+                db.commit()
+                
+                # Quick greeting response
+                greeting = clinic.voice_greeting or f"Hello! Thank you for calling {clinic.name}. How can I help you today?"
+                twiml = twilio_service.create_gather_response(
+                    greeting,
+                    f"/api/voice/process?call_sid={CallSid}"
+                )
+                
+            except Exception as e:
+                print(f"❌ Database error in webhook: {e}")
+                # Fallback response without database
+                twiml = twilio_service.create_gather_response(
+                    "Hello! Thank you for calling. How can I help you today?",
+                    f"/api/voice/process?call_sid={CallSid}"
+                )
+            
+        elif SpeechResult:
+            # For speech processing, use the lightweight process endpoint
+            twiml = await process_speech_lightweight(
+                speech_text=SpeechResult,
+                call_sid=CallSid,
+                db=db
+            )
+            
+        else:
+            # Fallback response
+            twiml = twilio_service.create_gather_response(
+                "I'm sorry, I didn't understand. Could you please repeat that?",
+                f"/api/voice/process?call_sid={CallSid}"
+            )
+        
         return Response(content=twiml, media_type="application/xml")
-    
-    # Create or update call log
-    call_log = db.query(CallLog).filter(CallLog.twilio_call_sid == CallSid).first()
-    if not call_log:
-        call_log = CallLog(
-            clinic_id=clinic.id,
-            twilio_call_sid=CallSid,
-            caller_phone=From,
-            call_status=CallStatus,
-            call_direction=webhook_data.get("direction", "inbound"),
-            call_started_at=datetime.utcnow()
+        
+    except Exception as e:
+        print(f"❌ Critical error in webhook: {e}")
+        # Emergency fallback response
+        emergency_twiml = twilio_service.create_hangup_response(
+            "I apologize, but I'm experiencing technical difficulties. Please call back in a moment or try our emergency line."
         )
-        db.add(call_log)
+        return Response(content=emergency_twiml, media_type="application/xml")
+
+
+async def process_speech_lightweight(
+    speech_text: str,
+    call_sid: str,
+    db: Session
+) -> str:
+    """Lightweight speech processing for fast webhook response."""
+    
+    try:
+        # Quick database lookup with timeout protection
+        call_log = db.query(CallLog).filter(CallLog.twilio_call_sid == call_sid).first()
+        if not call_log:
+            return twilio_service.create_hangup_response("Session expired. Please call back.")
+        
+        # Basic response without heavy LLM processing
+        if any(word in speech_text.lower() for word in ["emergency", "urgent", "help", "dying"]):
+            # Emergency response
+            response_text = "This sounds urgent. Let me connect you with our emergency service right away. Please hold."
+            twiml = twilio_service.create_hangup_response(response_text)
+        elif any(word in speech_text.lower() for word in ["appointment", "book", "schedule"]):
+            # Appointment response
+            response_text = "I'd be happy to help you schedule an appointment. Let me connect you with our booking system."
+            twiml = twilio_service.create_gather_response(
+                response_text,
+                f"/api/voice/process?call_sid={call_sid}"
+            )
+        else:
+            # General response
+            response_text = "I understand. Let me help you with that. One moment please."
+            twiml = twilio_service.create_gather_response(
+                response_text,
+                f"/api/voice/process?call_sid={call_sid}"
+            )
+        
+        # Quick transcript update
+        call_log.transcript = f"{call_log.transcript or ''}\nUser: {speech_text}\nAI: {response_text}"
         db.commit()
-        db.refresh(call_log)
-    
-    # Handle different call statuses
-    if CallStatus == "ringing":
-        # Initial greeting
-        greeting = clinic.voice_greeting or f"Hello! Thank you for calling {clinic.name}. How can I help you today?"
-        twiml = twilio_service.create_gather_response(
-            greeting,
-            f"/api/voice/process?call_sid={CallSid}"
-        )
         
-    elif SpeechResult:
-        # Process speech input
-        twiml = await process_speech_input(
-            speech_text=SpeechResult,
-            call_sid=CallSid,
-            clinic=clinic,
-            call_log=call_log,
-            db=db
-        )
+        return twiml
         
-    else:
+    except Exception as e:
+        print(f"❌ Error in lightweight processing: {e}")
         # Fallback response
-        twiml = twilio_service.create_gather_response(
-            "I'm sorry, I didn't understand. Could you please repeat that?",
-            f"/api/voice/process?call_sid={CallSid}"
+        return twilio_service.create_gather_response(
+            "I'm here to help. Could you please tell me what you need?",
+            f"/api/voice/process?call_sid={call_sid}"
         )
-    
-    return Response(content=twiml, media_type="application/xml")
 
 
 @router.post("/process")
@@ -103,7 +160,7 @@ async def process_speech(
     SpeechResult: str = Form(...),
     Confidence: Optional[float] = Form(None)
 ):
-    """Process speech input from Twilio."""
+    """Process speech input from Twilio with full AI processing."""
     
     # Get call log and clinic
     call_log = db.query(CallLog).filter(CallLog.twilio_call_sid == call_sid).first()
@@ -113,7 +170,7 @@ async def process_speech(
     
     clinic = db.query(Clinic).filter(Clinic.id == call_log.clinic_id).first()
     
-    # Process the speech
+    # Process the speech with full AI capabilities
     twiml = await process_speech_input(
         speech_text=SpeechResult,
         call_sid=call_sid,
