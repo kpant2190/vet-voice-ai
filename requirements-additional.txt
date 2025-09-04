@@ -1,0 +1,4 @@
+# Python dependencies (update requirements.txt)
+phonenumbers==8.13.25
+
+# Add to existing requirements.txt
