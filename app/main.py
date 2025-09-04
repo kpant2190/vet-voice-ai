@@ -1,5 +1,14 @@
 """Main FastAPI application."""
 
+# Railway startup check
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+try:
+    import railway_startup_check
+except ImportError:
+    print("⚠️ Railway startup check not available")
+
 from fastapi import FastAPI, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
