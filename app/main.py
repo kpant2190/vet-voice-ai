@@ -184,9 +184,9 @@ async def voice_conversation():
         
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="alice">Hello! You've reached AI Veterinary Clinic. I'm your AI assistant, and I'm here to help you and your pet. How can I assist you today?</Say>
-    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="5" timeout="15" language="en-AU">
-        <Say voice="alice">Please tell me what you need help with, such as booking an appointment, asking about your pet's health, or if this is an emergency.</Say>
+    <Say voice="Polly.Joanna">Hello! You've reached AI Veterinary Clinic. I'm your AI assistant, and I'm here to help you and your pet. How can I assist you today?</Say>
+    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="8" timeout="20" language="en-AU" enhanced="true">
+        <Say voice="Polly.Joanna">Please tell me what you need help with, such as booking an appointment, asking about your pet's health, or if this is an emergency.</Say>
     </Gather>
     <Redirect>/voice-conversation-retry</Redirect>
 </Response>'''
@@ -195,7 +195,7 @@ async def voice_conversation():
         print(f"❌ Voice conversation error: {e}")
         # Safe fallback
         return Response(
-            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thank you for calling AI Veterinary Clinic!</Say><Hangup/></Response>',
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna">Thank you for calling AI Veterinary Clinic!</Say><Hangup/></Response>',
             media_type="application/xml"
         )
 
@@ -206,11 +206,11 @@ async def voice_conversation_retry():
     try:
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="alice">I didn't catch that. Could you please tell me briefly what you need help with?</Say>
-    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="3" timeout="10" language="en-AU">
-        <Say voice="alice">For example, say appointment, emergency, or health question.</Say>
+    <Say voice="Polly.Joanna">I didn't catch that. Could you please tell me briefly what you need help with?</Say>
+    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="5" timeout="12" language="en-AU" enhanced="true">
+        <Say voice="Polly.Joanna">For example, say appointment, emergency, or health question.</Say>
     </Gather>
-    <Say voice="alice">I'm having trouble hearing you. Our team will call you back within 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!</Say>
+    <Say voice="Polly.Joanna">I'm having trouble hearing you. Our team will call you back within 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!</Say>
     <Hangup/>
 </Response>'''
         return Response(content=twiml, media_type="application/xml")
@@ -281,33 +281,47 @@ async def railway_webhook():
 
 @app.post("/simple-response")
 async def simple_response(SpeechResult: str = Form(None)):
-    """Handle simple speech responses without database."""
+    """Enhanced speech responses with better voice and comprehensive processing."""
     try:
         import time
-        print(f"Speech received: {SpeechResult} at {time.time()}")
+        print(f"🎤 Speech received: '{SpeechResult}' at {time.time()}")
         
         if SpeechResult:
             speech_lower = SpeechResult.lower()
             
-            if any(word in speech_lower for word in ["emergency", "urgent", "dying", "bleeding"]):
-                response = "This sounds like an emergency! Please hang up and call emergency services or visit the nearest emergency veterinary clinic immediately!"
-            elif any(word in speech_lower for word in ["appointment", "schedule", "book"]):
-                response = "I'd be happy to help you schedule an appointment! Our staff will call you back within 10 minutes to book that for you."
+            # Emergency keywords - highest priority
+            if any(word in speech_lower for word in ["emergency", "urgent", "dying", "bleeding", "poison", "choking", "unconscious", "seizure"]):
+                response = "This sounds like an emergency! Please hang up immediately and call your nearest emergency veterinary clinic or animal hospital right away. Time is critical for your pet's safety!"
+                
+            # Appointment keywords  
+            elif any(word in speech_lower for word in ["appointment", "schedule", "book", "visit", "checkup", "vaccination", "vaccine"]):
+                response = "Perfect! I'd be happy to help you schedule an appointment for your pet. Our booking team will call you back within 10 minutes to check available times and confirm the details."
+                
+            # Health concern keywords
+            elif any(word in speech_lower for word in ["sick", "ill", "vomiting", "diarrhea", "not eating", "limping", "cough", "scratching", "lethargic", "pain"]):
+                response = "I understand you have concerns about your pet's health. Our experienced veterinary team will call you back within 10 minutes to discuss your pet's symptoms and determine the best care."
+                
+            # Prescription keywords
+            elif any(word in speech_lower for word in ["prescription", "medication", "medicine", "refill", "pills"]):
+                response = "Of course! I can help you with prescription needs. Our pharmacy team will call you back within 10 minutes to check your pet's prescription status and process any refills."
+                
+            # General inquiry
             else:
-                response = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you."
+                response = f"Thank you for calling AI Veterinary Clinic! I heard you mention '{SpeechResult}'. Our knowledgeable team will call you back within 10 minutes to help with whatever your pet needs."
         else:
-            response = "Thank you for calling AI Veterinary Clinic!"
+            response = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you and your pet."
         
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="alice">{response}</Say>
+    <Say voice="Polly.Joanna">{response}</Say>
     <Hangup/>
 </Response>'''
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
+        print(f"❌ Simple response error: {e}")
         return Response(
-            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling!</Say><Hangup/></Response>',
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna">Thank you for calling AI Veterinary Clinic!</Say><Hangup/></Response>',
             media_type="application/xml"
         )
 
