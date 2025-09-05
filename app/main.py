@@ -159,7 +159,8 @@ async def ultra_simple_webhook():
     """Ultra-simple webhook with minimal processing"""
     twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Hello from Sunny Paws Veterinary Clinic. This is a test call.</Say>
+    <Say voice="alice">Hello! You have reached AI Veterinary Clinic. This call is working correctly. Thank you for calling!</Say>
+    <Hangup/>
 </Response>'''
     return Response(content=twiml, media_type="application/xml")
 
