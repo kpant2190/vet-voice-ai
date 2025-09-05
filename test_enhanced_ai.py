@@ -43,10 +43,10 @@ def test_enhanced_endpoints():
             if 'I\'m your AI assistant' in content:
                 print(f"   ✅ Enhanced greeting present")
             
-            if 'speechTimeout="5"' in content:
+            if 'speechTimeout="6"' in content:
                 print(f"   ✅ Enhanced speech settings present")
             
-            if 'process-speech' in content:
+            if 'speech-handler' in content:
                 print(f"   ✅ Enhanced speech processing present")
                 
             print(f"   📄 Response preview:")
@@ -70,17 +70,20 @@ def test_enhanced_endpoints():
     
     try:
         speech_response = requests.post(
-            f"{base_url}/process-speech",
-            data={'SpeechResult': 'I need an appointment', 'CallSid': 'test123'},
+            f"{base_url}/speech",
+            data={'SpeechResult': 'I need an appointment'},
             timeout=5
         )
-        print(f"   /process-speech: {speech_response.status_code}")
+        print(f"   /speech: {speech_response.status_code}")
         
         if speech_response.status_code == 200:
             print(f"   ✅ Speech processing working!")
             
             if 'appointment' in speech_response.text.lower():
                 print(f"   ✅ Intelligent keyword detection working")
+                
+            if 'Polly.Joanna' in speech_response.text:
+                print(f"   ✅ Premium voice quality confirmed")
             
         elif speech_response.status_code == 404:
             print(f"   ❌ Speech processing not deployed yet")

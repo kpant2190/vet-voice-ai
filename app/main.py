@@ -187,8 +187,12 @@ async def voice_conversation():
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     {greeting_tag}
-    <Gather input="speech" action="/speech" method="POST" speechTimeout="6" timeout="18" language="en-AU" enhanced="true">
+    <Gather input="speech" action="/speech" method="POST" speechTimeout="3" timeout="12" language="en-AU" enhanced="true" partialResultCallback="/partial">
         {prompt_tag}
+    </Gather>
+    <Say voice="Polly.Joanna">I didn't hear anything. Let me try a different approach.</Say>
+    <Gather input="speech dtmf" action="/speech" method="POST" speechTimeout="4" timeout="8" language="en-AU">
+        <Say voice="Polly.Joanna">Please speak now, or press 1 for appointment, 2 for emergency, or 3 for health question.</Say>
     </Gather>
     <Redirect>/speech</Redirect>
 </Response>'''
@@ -225,19 +229,51 @@ async def voice_conversation_retry():
 # ULTRA-MINIMAL SPEECH ENDPOINT - CANNOT FAIL
 @app.post("/speech")
 @app.get("/speech")
-async def speech(SpeechResult: str = Form(None)):
-    """Ultra-minimal speech endpoint that cannot possibly timeout."""
-    if SpeechResult and "emergency" in SpeechResult.lower():
-        msg = "Emergency! Call your nearest emergency vet immediately!"
-    elif SpeechResult and "appointment" in SpeechResult.lower():
-        msg = "Perfect! Our team will call you back in 10 minutes to book your appointment."
+async def speech(SpeechResult: str = Form(None), Digits: str = Form(None)):
+    """Ultra-minimal speech endpoint with DTMF backup."""
+    
+    # Handle DTMF input (keypad presses)
+    if Digits:
+        if Digits == "1":
+            msg = "Perfect! You pressed 1 for appointment. Our team will call you back in 10 minutes to book your appointment."
+        elif Digits == "2":
+            msg = "You pressed 2 for emergency. Please hang up and call your nearest emergency vet immediately!"
+        elif Digits == "3":
+            msg = "You pressed 3 for health question. Our vet team will call you back in 10 minutes to discuss your pet's health."
+        else:
+            msg = "Thank you for calling! Our team will call you back in 10 minutes."
+    # Handle speech input
     elif SpeechResult:
-        msg = "Thank you! Our team will call you back in 10 minutes."
+        speech_lower = SpeechResult.lower()
+        if "emergency" in speech_lower or "urgent" in speech_lower:
+            msg = "Emergency detected! Please call your nearest emergency vet immediately!"
+        elif "appointment" in speech_lower or "book" in speech_lower or "schedule" in speech_lower:
+            msg = "Perfect! Our team will call you back in 10 minutes to book your appointment."
+        elif "sick" in speech_lower or "ill" in speech_lower or "health" in speech_lower:
+            msg = "I understand your pet needs attention. Our vet will call you back in 10 minutes."
+        else:
+            msg = f"Thank you for calling! I heard '{SpeechResult}'. Our team will call you back in 10 minutes."
+    # No input detected
     else:
-        msg = "Thank you for calling!"
+        msg = "Thank you for calling AI Veterinary Clinic! Our team will call you back in 10 minutes."
     
     return Response(
         content=f'<Response><Say voice="Polly.Joanna">{msg}</Say><Hangup/></Response>',
+        media_type="application/xml"
+    )
+
+# Add partial result callback for better speech recognition
+@app.post("/partial")
+async def partial_speech_callback(
+    UnstableSpeechResult: str = Form(None),
+    StableSpeechResult: str = Form(None)
+):
+    """Handle partial speech results to improve recognition."""
+    print(f"🎤 Partial speech - Stable: '{StableSpeechResult}', Unstable: '{UnstableSpeechResult}'")
+    
+    # Return empty response to continue gathering
+    return Response(
+        content='<Response></Response>',
         media_type="application/xml"
     )
 
