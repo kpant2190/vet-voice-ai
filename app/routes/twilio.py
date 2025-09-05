@@ -15,8 +15,7 @@ from app.telephony.twilio_twiml import (
     generate_transfer_twiml
 )
 from app.telephony.twilio_signature import (
-    require_twilio_signature,
-    webhook_validator
+    require_twilio_signature
 )
 from app.telephony.media_server import media_server
 
@@ -223,17 +222,18 @@ async def call_status_webhook(
 @router.post("/recording")
 async def recording_webhook(
     request: Request,
-    CallSid: str = Form(...),
-    RecordingUrl: str = Form(...),
-    RecordingSid: str = Form(...),
-    RecordingDuration: str = Form(...),
-    _: None = Depends(require_twilio_signature)
+    form_data: Dict[str, Any] = Depends(require_twilio_signature)
 ):
     """
     Twilio recording webhook endpoint.
     
     Handles recording completion events.
     """
+    CallSid = form_data.get("CallSid")
+    RecordingUrl = form_data.get("RecordingUrl")
+    RecordingSid = form_data.get("RecordingSid")
+    RecordingDuration = form_data.get("RecordingDuration")
+    
     logger.info(
         "Recording completed",
         call_sid=CallSid,
@@ -248,7 +248,7 @@ async def recording_webhook(
             "call_sid": CallSid,
             "recording_sid": RecordingSid,
             "recording_url": RecordingUrl,
-            "duration": int(RecordingDuration),
+            "duration": int(RecordingDuration) if RecordingDuration else 0,
             "timestamp": datetime.utcnow().isoformat()
         }
         
@@ -258,24 +258,25 @@ async def recording_webhook(
         return {"status": "ok"}
         
     except Exception as e:
-        logger.error(f"Recording webhook error: {e}", call_sid=CallSid)
+        logger.error(f"Recording webhook error: {e}", call_sid=CallSid, exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
 @router.post("/transcription")
 async def transcription_webhook(
     request: Request,
-    CallSid: str = Form(...),
-    TranscriptionText: str = Form(...),
-    TranscriptionStatus: str = Form(...),
-    TranscriptionSid: str = Form(...),
-    _: None = Depends(require_twilio_signature)
+    form_data: Dict[str, Any] = Depends(require_twilio_signature)
 ):
     """
     Twilio transcription webhook endpoint.
     
     Handles transcription completion events.
     """
+    CallSid = form_data.get("CallSid")
+    TranscriptionText = form_data.get("TranscriptionText")
+    TranscriptionStatus = form_data.get("TranscriptionStatus")
+    TranscriptionSid = form_data.get("TranscriptionSid")
+    
     logger.info(
         "Transcription completed",
         call_sid=CallSid,
@@ -294,7 +295,7 @@ async def transcription_webhook(
         return {"status": "ok"}
         
     except Exception as e:
-        logger.error(f"Transcription webhook error: {e}", call_sid=CallSid)
+        logger.error(f"Transcription webhook error: {e}", call_sid=CallSid, exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -320,16 +321,18 @@ async def get_active_sessions():
 @router.post("/transfer")
 async def transfer_call(
     request: Request,
-    CallSid: str = Form(...),
-    From: str = Form(...),
-    TransferTo: str = Form(...),
-    _: None = Depends(require_twilio_signature)
+    form_data: Dict[str, Any] = Depends(require_twilio_signature)
 ):
     """
     Transfer call to human staff.
     
     Generates TwiML to transfer the call to specified number.
     """
+    CallSid = form_data.get("CallSid")
+    From = form_data.get("From")
+    TransferTo = form_data.get("TransferTo")
+    To = form_data.get("To", "")
+    
     logger.info(
         "Call transfer requested",
         call_sid=CallSid,
@@ -338,7 +341,7 @@ async def transfer_call(
     )
     
     try:
-        clinic_id = _get_clinic_id_from_number(request.form().get("To", ""))
+        clinic_id = _get_clinic_id_from_number(To)
         clinic_context = _get_clinic_context(clinic_id)
         
         twiml = generate_transfer_twiml(TransferTo, clinic_context)
@@ -346,7 +349,7 @@ async def transfer_call(
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
-        logger.error(f"Transfer webhook error: {e}", call_sid=CallSid)
+        logger.error(f"Transfer webhook error: {e}", call_sid=CallSid, exc_info=True)
         
         error_twiml = generate_error_response("general")
         return Response(content=error_twiml, media_type="application/xml")
