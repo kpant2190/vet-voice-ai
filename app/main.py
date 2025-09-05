@@ -185,7 +185,7 @@ async def voice_conversation():
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice">Hello! You've reached AI Veterinary Clinic. I'm your AI assistant, and I'm here to help you and your pet. How can I assist you today?</Say>
-    <Gather input="speech" action="/process-speech" method="POST" speechTimeout="5" timeout="15" language="en-AU">
+    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="5" timeout="15" language="en-AU">
         <Say voice="alice">Please tell me what you need help with, such as booking an appointment, asking about your pet's health, or if this is an emergency.</Say>
     </Gather>
     <Redirect>/voice-conversation-retry</Redirect>
@@ -207,7 +207,7 @@ async def voice_conversation_retry():
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice">I didn't catch that. Could you please tell me briefly what you need help with?</Say>
-    <Gather input="speech" action="/process-speech" method="POST" speechTimeout="3" timeout="10" language="en-AU">
+    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="3" timeout="10" language="en-AU">
         <Say voice="alice">For example, say appointment, emergency, or health question.</Say>
     </Gather>
     <Say voice="alice">I'm having trouble hearing you. Our team will call you back within 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!</Say>
