@@ -187,11 +187,11 @@ async def voice_conversation():
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     {greeting_tag}
-    <Gather input="speech" action="/speech" method="POST" speechTimeout="3" timeout="12" language="en-AU" enhanced="true" partialResultCallback="/partial">
+    <Gather input="speech" action="/speech" method="POST" speechTimeout="2" timeout="8" language="en-US" hints="appointment,emergency,sick,help">
         {prompt_tag}
     </Gather>
     <Say voice="Polly.Joanna">I didn't hear anything. Let me try a different approach.</Say>
-    <Gather input="speech dtmf" action="/speech" method="POST" speechTimeout="4" timeout="8" language="en-AU">
+    <Gather input="speech dtmf" action="/speech" method="POST" speechTimeout="1" timeout="6" language="en-US">
         <Say voice="Polly.Joanna">Please speak now, or press 1 for appointment, 2 for emergency, or 3 for health question.</Say>
     </Gather>
     <Redirect>/speech</Redirect>
@@ -229,11 +229,18 @@ async def voice_conversation_retry():
 # ULTRA-MINIMAL SPEECH ENDPOINT - CANNOT FAIL
 @app.post("/speech")
 @app.get("/speech")
-async def speech(SpeechResult: str = Form(None), Digits: str = Form(None)):
-    """Ultra-minimal speech endpoint with DTMF backup."""
+async def speech(SpeechResult: str = Form(None), Digits: str = Form(None), CallSid: str = Form(None)):
+    """Ultra-minimal speech endpoint with DTMF backup and debugging."""
     
-    # Handle DTMF input (keypad presses)
+    # Log everything for debugging
+    print(f"🎤 SPEECH ENDPOINT CALLED:")
+    print(f"   SpeechResult: '{SpeechResult}'")
+    print(f"   Digits: '{Digits}'")
+    print(f"   CallSid: '{CallSid}'")
+    
+    # Handle DTMF input (keypad presses) - WORKING
     if Digits:
+        print(f"📱 DTMF Input detected: {Digits}")
         if Digits == "1":
             msg = "Perfect! You pressed 1 for appointment. Our team will call you back in 10 minutes to book your appointment."
         elif Digits == "2":
@@ -242,20 +249,27 @@ async def speech(SpeechResult: str = Form(None), Digits: str = Form(None)):
             msg = "You pressed 3 for health question. Our vet team will call you back in 10 minutes to discuss your pet's health."
         else:
             msg = "Thank you for calling! Our team will call you back in 10 minutes."
-    # Handle speech input
-    elif SpeechResult:
-        speech_lower = SpeechResult.lower()
+    
+    # Handle speech input - NEEDS FIXING
+    elif SpeechResult and SpeechResult.strip():
+        print(f"🗣️ SPEECH Input detected: '{SpeechResult}'")
+        speech_lower = SpeechResult.lower().strip()
+        
         if "emergency" in speech_lower or "urgent" in speech_lower:
-            msg = "Emergency detected! Please call your nearest emergency vet immediately!"
+            msg = f"Emergency detected! I heard you say '{SpeechResult}'. Please call your nearest emergency vet immediately!"
         elif "appointment" in speech_lower or "book" in speech_lower or "schedule" in speech_lower:
-            msg = "Perfect! Our team will call you back in 10 minutes to book your appointment."
+            msg = f"Perfect! I heard you say '{SpeechResult}'. Our team will call you back in 10 minutes to book your appointment."
         elif "sick" in speech_lower or "ill" in speech_lower or "health" in speech_lower:
-            msg = "I understand your pet needs attention. Our vet will call you back in 10 minutes."
+            msg = f"I understand your pet needs attention. I heard you say '{SpeechResult}'. Our vet will call you back in 10 minutes."
         else:
-            msg = f"Thank you for calling! I heard '{SpeechResult}'. Our team will call you back in 10 minutes."
-    # No input detected
+            msg = f"Thank you for calling! I heard you say '{SpeechResult}'. Our team will call you back in 10 minutes to help you."
+    
+    # No input detected - FALLBACK
     else:
-        msg = "Thank you for calling AI Veterinary Clinic! Our team will call you back in 10 minutes."
+        print("❌ NO INPUT detected - SpeechResult and Digits both empty/None")
+        msg = "I didn't hear anything clearly. Our team will call you back in 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!"
+    
+    print(f"📞 Responding with: {msg[:50]}...")
     
     return Response(
         content=f'<Response><Say voice="Polly.Joanna">{msg}</Say><Hangup/></Response>',
@@ -274,6 +288,16 @@ async def partial_speech_callback(
     # Return empty response to continue gathering
     return Response(
         content='<Response></Response>',
+        media_type="application/xml"
+    )
+
+# SPEECH TEST ENDPOINT
+@app.post("/speech-test")
+@app.get("/speech-test")
+async def speech_test():
+    """Simple test endpoint for speech without any processing."""
+    return Response(
+        content='<Response><Say voice="Polly.Joanna">Speech test successful! Your voice was heard.</Say><Hangup/></Response>',
         media_type="application/xml"
     )
 
