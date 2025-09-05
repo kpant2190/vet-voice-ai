@@ -17,6 +17,7 @@ import uvicorn
 from .core.config import settings
 from .core.database import initialize_database, create_tables, engine
 from .api.voice import router as voice_router
+from .api.minimal_voice import router as minimal_voice_router
 from .api.sms import router as sms_router
 from .api.appointments import router as appointments_router
 from .api.clinics import router as clinics_router
@@ -60,6 +61,12 @@ app.include_router(
     voice_router,
     prefix=f"{settings.API_V1_STR}/voice",
     tags=["voice"]
+)
+
+app.include_router(
+    minimal_voice_router,
+    prefix=f"{settings.API_V1_STR}/voice",
+    tags=["minimal-voice"]
 )
 
 app.include_router(
