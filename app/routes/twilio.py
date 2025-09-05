@@ -42,11 +42,7 @@ async def voice_webhook(
     AccountSid = form_data.get("AccountSid")
     
     logger.info(
-        "Incoming voice call",
-        call_sid=CallSid,
-        from_number=From,
-        to_number=To,
-        status=CallStatus
+        f"Incoming voice call - CallSid: {CallSid}, From: {From}, To: {To}, Status: {CallStatus}"
     )
     
     try:
@@ -84,12 +80,12 @@ async def voice_webhook(
         # Generate TwiML response
         twiml = voice_entry(call_context)
         
-        logger.debug("Generated TwiML", call_sid=CallSid, twiml=twiml[:200])
+        logger.debug(f"Generated TwiML for CallSid: {CallSid} - {twiml[:200]}...")
         
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
-        logger.error(f"Voice webhook error: {e}", call_sid=CallSid, exc_info=True)
+        logger.error(f"Voice webhook error for CallSid {CallSid}: {e}", exc_info=True)
         
         # Return error TwiML
         error_twiml = generate_error_response("system")
@@ -112,10 +108,7 @@ async def dtmf_webhook(
     To = form_data.get("To", "")
     
     logger.info(
-        "DTMF input received",
-        call_sid=CallSid,
-        from_number=From,
-        digits=Digits
+        f"DTMF input received - CallSid: {CallSid}, From: {From}, Digits: {Digits}"
     )
     
     try:
@@ -126,9 +119,7 @@ async def dtmf_webhook(
         # Handle special cases
         if Digits == "2":  # Emergency
             logger.warning(
-                "Emergency DTMF selected",
-                call_sid=CallSid,
-                from_number=From
+                f"Emergency DTMF selected - CallSid: {CallSid}, From: {From}"
             )
         
         # Generate DTMF response
@@ -137,7 +128,7 @@ async def dtmf_webhook(
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
-        logger.error(f"DTMF webhook error: {e}", call_sid=CallSid, exc_info=True)
+        logger.error(f"DTMF webhook error for CallSid {CallSid}: {e}", exc_info=True)
         
         error_twiml = generate_error_response("general")
         return Response(content=error_twiml, media_type="application/xml")
@@ -156,17 +147,14 @@ async def websocket_endpoint(
     Handles real-time audio streaming with barge-in functionality.
     """
     logger.info(
-        "WebSocket connection requested",
-        call_sid=callSid,
-        from_number=fromNumber,
-        clinic_id=clinicId
+        f"WebSocket connection requested - CallSid: {callSid}, From: {fromNumber}, ClinicId: {clinicId}"
     )
     
     try:
         await media_server.handle_websocket(websocket, callSid, fromNumber, clinicId)
         
     except Exception as e:
-        logger.error(f"WebSocket error: {e}", call_sid=callSid)
+        logger.error(f"WebSocket error for CallSid {callSid}: {e}")
 
 
 @router.post("/status")
@@ -186,11 +174,7 @@ async def call_status_webhook(
     Duration = form_data.get("Duration")
     
     logger.info(
-        "Call status update",
-        call_sid=CallSid,
-        status=CallStatus,
-        duration=Duration,
-        from_number=From
+        f"Call status update - CallSid: {CallSid}, Status: {CallStatus}, Duration: {Duration}, From: {From}"
     )
     
     try:
@@ -198,24 +182,18 @@ async def call_status_webhook(
         if CallStatus == "completed":
             duration_seconds = int(Duration) if Duration else 0
             logger.info(
-                "Call completed",
-                call_sid=CallSid,
-                duration=duration_seconds,
-                from_number=From
+                f"Call completed - CallSid: {CallSid}, Duration: {duration_seconds}s, From: {From}"
             )
         
         elif CallStatus in ["failed", "busy", "no-answer"]:
             logger.warning(
-                "Call not completed",
-                call_sid=CallSid,
-                status=CallStatus,
-                from_number=From
+                f"Call not completed - CallSid: {CallSid}, Status: {CallStatus}, From: {From}"
             )
         
         return {"status": "ok"}
         
     except Exception as e:
-        logger.error(f"Status webhook error: {e}", call_sid=CallSid, exc_info=True)
+        logger.error(f"Status webhook error for CallSid {CallSid}: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -235,11 +213,7 @@ async def recording_webhook(
     RecordingDuration = form_data.get("RecordingDuration")
     
     logger.info(
-        "Recording completed",
-        call_sid=CallSid,
-        recording_sid=RecordingSid,
-        duration=RecordingDuration,
-        url=RecordingUrl
+        f"Recording completed - CallSid: {CallSid}, RecordingSid: {RecordingSid}, Duration: {RecordingDuration}, URL: {RecordingUrl}"
     )
     
     try:
@@ -258,7 +232,7 @@ async def recording_webhook(
         return {"status": "ok"}
         
     except Exception as e:
-        logger.error(f"Recording webhook error: {e}", call_sid=CallSid, exc_info=True)
+        logger.error(f"Recording webhook error for CallSid {CallSid}: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -278,24 +252,19 @@ async def transcription_webhook(
     TranscriptionSid = form_data.get("TranscriptionSid")
     
     logger.info(
-        "Transcription completed",
-        call_sid=CallSid,
-        transcription_sid=TranscriptionSid,
-        status=TranscriptionStatus
+        f"Transcription completed - CallSid: {CallSid}, TranscriptionSid: {TranscriptionSid}, Status: {TranscriptionStatus}"
     )
     
     try:
         if TranscriptionStatus == "completed":
             logger.debug(
-                "Call transcription",
-                call_sid=CallSid,
-                text=TranscriptionText[:200] + "..." if len(TranscriptionText) > 200 else TranscriptionText
+                f"Call transcription for CallSid {CallSid}: {TranscriptionText[:200] + '...' if len(TranscriptionText) > 200 else TranscriptionText}"
             )
         
         return {"status": "ok"}
         
     except Exception as e:
-        logger.error(f"Transcription webhook error: {e}", call_sid=CallSid, exc_info=True)
+        logger.error(f"Transcription webhook error for CallSid {CallSid}: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -334,10 +303,7 @@ async def transfer_call(
     To = form_data.get("To", "")
     
     logger.info(
-        "Call transfer requested",
-        call_sid=CallSid,
-        from_number=From,
-        transfer_to=TransferTo
+        f"Call transfer requested - CallSid: {CallSid}, From: {From}, TransferTo: {TransferTo}"
     )
     
     try:
@@ -349,7 +315,7 @@ async def transfer_call(
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
-        logger.error(f"Transfer webhook error: {e}", call_sid=CallSid, exc_info=True)
+        logger.error(f"Transfer webhook error for CallSid {CallSid}: {e}", exc_info=True)
         
         error_twiml = generate_error_response("general")
         return Response(content=error_twiml, media_type="application/xml")
