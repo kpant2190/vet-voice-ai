@@ -22,6 +22,7 @@ from .api.minimal_voice import router as minimal_voice_router
 from .api.sms import router as sms_router
 from .api.appointments import router as appointments_router
 from .api.clinics import router as clinics_router
+from .routes.twilio import router as twilio_router
 
 # Create FastAPI instance
 app = FastAPI(
@@ -78,6 +79,12 @@ app.include_router(
     clinics_router,
     prefix=f"{settings.API_V1_STR}/clinics",
     tags=["clinics"]
+)
+
+# Include new enterprise Twilio routes
+app.include_router(
+    twilio_router,
+    tags=["enterprise-telephony"]
 )
 
 # Health check endpoint for Railway
