@@ -174,6 +174,191 @@ async def ultra_simple_webhook():
 </Response>'''
         return Response(content=emergency_twiml, media_type="application/xml")
 
+# Enhanced conversational AI webhook
+@app.post("/voice-conversation")
+@app.get("/voice-conversation")
+async def voice_conversation():
+    """Enhanced conversational AI webhook with intelligent responses."""
+    try:
+        print(f"🎤 Enhanced voice conversation started at {time.time()}")
+        
+        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Hello! You've reached AI Veterinary Clinic. I'm your AI assistant, and I'm here to help you and your pet. How can I assist you today?</Say>
+    <Gather input="speech" action="/process-speech" method="POST" speechTimeout="5" timeout="15" language="en-AU">
+        <Say voice="alice">Please tell me what you need help with, such as booking an appointment, asking about your pet's health, or if this is an emergency.</Say>
+    </Gather>
+    <Redirect>/voice-conversation-retry</Redirect>
+</Response>'''
+        return Response(content=twiml, media_type="application/xml")
+    except Exception as e:
+        print(f"❌ Voice conversation error: {e}")
+        # Safe fallback
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thank you for calling AI Veterinary Clinic!</Say><Hangup/></Response>',
+            media_type="application/xml"
+        )
+
+@app.post("/voice-conversation-retry")
+@app.get("/voice-conversation-retry")
+async def voice_conversation_retry():
+    """Retry voice conversation with shorter timeout."""
+    try:
+        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">I didn't catch that. Could you please tell me briefly what you need help with?</Say>
+    <Gather input="speech" action="/process-speech" method="POST" speechTimeout="3" timeout="10" language="en-AU">
+        <Say voice="alice">For example, say appointment, emergency, or health question.</Say>
+    </Gather>
+    <Say voice="alice">I'm having trouble hearing you. Our team will call you back within 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!</Say>
+    <Hangup/>
+</Response>'''
+        return Response(content=twiml, media_type="application/xml")
+    except Exception as e:
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thank you for calling!</Say><Hangup/></Response>',
+            media_type="application/xml"
+        )
+
+@app.post("/process-speech")
+async def process_speech(
+    SpeechResult: str = Form(None),
+    CallSid: str = Form(None),
+    From: str = Form(None),
+    Confidence: str = Form(None)
+):
+    """Process speech with intelligent keyword detection and responses."""
+    try:
+        print(f"🎤 Speech processing: '{SpeechResult}' (confidence: {Confidence})")
+        
+        if not SpeechResult:
+            # No speech detected - provide helpful fallback
+            twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">I didn't hear anything. Our friendly team will call you back within 10 minutes to help you. Thank you for calling AI Veterinary Clinic!</Say>
+    <Hangup/>
+</Response>'''
+            return Response(content=twiml, media_type="application/xml")
+        
+        speech_lower = SpeechResult.lower()
+        
+        # Emergency keywords - highest priority
+        emergency_keywords = [
+            "emergency", "urgent", "dying", "bleeding", "poison", "toxic", 
+            "can't breathe", "breathing", "seizure", "unconscious", "hit by car",
+            "vomiting blood", "blood", "collapsed", "choking", "swallowed",
+            "broken bone", "accident", "trauma", "critical"
+        ]
+        
+        # Appointment keywords
+        appointment_keywords = [
+            "appointment", "schedule", "book", "booking", "visit", "checkup",
+            "check up", "routine", "vaccination", "vaccine", "shots", "spay",
+            "neuter", "dental", "cleaning", "surgery", "consult", "see doctor"
+        ]
+        
+        # Health concern keywords
+        health_keywords = [
+            "sick", "ill", "not eating", "vomiting", "diarrhea", "limping",
+            "cough", "scratching", "itchy", "rash", "lethargic", "tired",
+            "weight loss", "drinking", "urinating", "behavior", "aggressive",
+            "pain", "hurt", "sore", "swollen", "lump", "bump"
+        ]
+        
+        # Prescription/medication keywords
+        prescription_keywords = [
+            "prescription", "medication", "medicine", "pills", "refill",
+            "antibiotics", "pain relief", "flea", "tick", "heartworm"
+        ]
+        
+        # Check for emergency first
+        if any(keyword in speech_lower for keyword in emergency_keywords):
+            response = """This sounds like an emergency! Please hang up immediately and either:
+            
+            Call your nearest emergency veterinary clinic right away, or bring your pet there directly.
+            
+            If it's after hours, search for "emergency vet near me" or "24 hour animal hospital".
+            
+            Time is critical in emergencies. Please get professional help immediately!"""
+            
+        elif any(keyword in speech_lower for keyword in appointment_keywords):
+            response = """Perfect! I'd be happy to help you schedule an appointment for your pet.
+            
+            Our booking team will call you back within 10 minutes to:
+            - Check our available appointment times
+            - Discuss what type of visit your pet needs
+            - Confirm all the details with you
+            
+            Thank you for choosing AI Veterinary Clinic for your pet's care!"""
+            
+        elif any(keyword in speech_lower for keyword in health_keywords):
+            response = """I understand you have concerns about your pet's health. That's exactly what we're here for!
+            
+            Our experienced veterinary team will call you back within 10 minutes to:
+            - Discuss your pet's symptoms in detail
+            - Provide initial guidance
+            - Determine if your pet needs to be seen urgently
+            
+            Thank you for being attentive to your pet's health!"""
+            
+        elif any(keyword in speech_lower for keyword in prescription_keywords):
+            response = """Of course! I can help you with prescription and medication needs.
+            
+            Our pharmacy team will call you back within 10 minutes to:
+            - Check your pet's prescription status
+            - Process any refills needed
+            - Answer medication questions
+            
+            Thank you for staying on top of your pet's medication needs!"""
+            
+        else:
+            # General inquiry - intelligent fallback
+            response = f"""Thank you for calling AI Veterinary Clinic! I heard you mention: "{SpeechResult}"
+            
+            Our knowledgeable team will call you back within 10 minutes to help with whatever you need.
+            
+            We're here to provide the best possible care for your pet!"""
+        
+        twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">{response}</Say>
+    <Hangup/>
+</Response>'''
+        
+        return Response(content=twiml, media_type="application/xml")
+        
+    except Exception as e:
+        print(f"❌ Speech processing error: {e}")
+        # Safe fallback
+        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you.</Say>
+    <Hangup/>
+</Response>'''
+        return Response(content=twiml, media_type="application/xml")
+
+@app.post("/partial-result")
+async def partial_result(
+    UnstableSpeechResult: str = Form(None),
+    StableSpeechResult: str = Form(None),
+    CallSid: str = Form(None)
+):
+    """Handle partial speech results for real-time processing."""
+    try:
+        print(f"🎤 Partial speech - Stable: '{StableSpeechResult}', Unstable: '{UnstableSpeechResult}'")
+        
+        # Return empty TwiML to continue gathering
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+            media_type="application/xml"
+        )
+    except Exception as e:
+        print(f"❌ Partial result error: {e}")
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+            media_type="application/xml"
+        )
+
 # Database-independent webhook for Railway
 @app.post("/railway-webhook")
 @app.get("/railway-webhook")
