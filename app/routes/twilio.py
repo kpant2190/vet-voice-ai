@@ -29,18 +29,19 @@ router = APIRouter(prefix="/twilio", tags=["twilio"])
 @router.post("/voice")
 async def voice_webhook(
     request: Request,
-    CallSid: str = Form(...),
-    From: str = Form(...),
-    To: str = Form(...),
-    CallStatus: str = Form(...),
-    AccountSid: str = Form(...),
-    _: None = Depends(require_twilio_signature)
+    form_data: Dict[str, Any] = Depends(require_twilio_signature)
 ):
     """
     Twilio voice webhook endpoint.
     
     Handles incoming calls and returns TwiML for voice response.
     """
+    CallSid = form_data.get("CallSid")
+    From = form_data.get("From")
+    To = form_data.get("To") 
+    CallStatus = form_data.get("CallStatus")
+    AccountSid = form_data.get("AccountSid")
+    
     logger.info(
         "Incoming voice call",
         call_sid=CallSid,
@@ -89,7 +90,7 @@ async def voice_webhook(
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
-        logger.error(f"Voice webhook error: {e}", call_sid=CallSid)
+        logger.error(f"Voice webhook error: {e}", call_sid=CallSid, exc_info=True)
         
         # Return error TwiML
         error_twiml = generate_error_response("system")
@@ -99,16 +100,18 @@ async def voice_webhook(
 @router.post("/dtmf")
 async def dtmf_webhook(
     request: Request,
-    CallSid: str = Form(...),
-    From: str = Form(...),
-    Digits: str = Form(...),
-    _: None = Depends(require_twilio_signature)
+    form_data: Dict[str, Any] = Depends(require_twilio_signature)
 ):
     """
     Twilio DTMF webhook endpoint.
     
     Handles DTMF digit input and returns appropriate TwiML response.
     """
+    CallSid = form_data.get("CallSid")
+    From = form_data.get("From")
+    Digits = form_data.get("Digits")
+    To = form_data.get("To", "")
+    
     logger.info(
         "DTMF input received",
         call_sid=CallSid,
@@ -118,7 +121,7 @@ async def dtmf_webhook(
     
     try:
         # Determine clinic context
-        clinic_id = _get_clinic_id_from_number(request.form().get("To", ""))
+        clinic_id = _get_clinic_id_from_number(To)
         clinic_context = _get_clinic_context(clinic_id)
         
         # Handle special cases
@@ -135,7 +138,7 @@ async def dtmf_webhook(
         return Response(content=twiml, media_type="application/xml")
         
     except Exception as e:
-        logger.error(f"DTMF webhook error: {e}", call_sid=CallSid)
+        logger.error(f"DTMF webhook error: {e}", call_sid=CallSid, exc_info=True)
         
         error_twiml = generate_error_response("general")
         return Response(content=error_twiml, media_type="application/xml")
@@ -170,18 +173,19 @@ async def websocket_endpoint(
 @router.post("/status")
 async def call_status_webhook(
     request: Request,
-    CallSid: str = Form(...),
-    CallStatus: str = Form(...),
-    From: str = Form(None),
-    To: str = Form(None),
-    Duration: str = Form(None),
-    _: None = Depends(require_twilio_signature)
+    form_data: Dict[str, Any] = Depends(require_twilio_signature)
 ):
     """
     Twilio call status webhook endpoint.
     
     Handles call status updates (completed, failed, etc.).
     """
+    CallSid = form_data.get("CallSid")
+    CallStatus = form_data.get("CallStatus")
+    From = form_data.get("From")
+    To = form_data.get("To")
+    Duration = form_data.get("Duration")
+    
     logger.info(
         "Call status update",
         call_sid=CallSid,
@@ -212,7 +216,7 @@ async def call_status_webhook(
         return {"status": "ok"}
         
     except Exception as e:
-        logger.error(f"Status webhook error: {e}", call_sid=CallSid)
+        logger.error(f"Status webhook error: {e}", call_sid=CallSid, exc_info=True)
         return {"status": "error", "message": str(e)}
 
 

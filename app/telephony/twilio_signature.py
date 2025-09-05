@@ -3,8 +3,8 @@
 import hashlib
 import hmac
 import base64
-from typing import Optional
-from urllib.parse import urlencode
+from typing import Optional, Dict, Any
+from urllib.parse import urlencode, quote
 import logging
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer
@@ -27,12 +27,17 @@ class TwilioSignatureValidator:
             auth_token: Twilio auth token for signature validation
         """
         self.auth_token = auth_token or os.getenv("TWILIO_AUTH_TOKEN")
+        self.environment = os.getenv("ENVIRONMENT", "production")
+        self.railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        
         if not self.auth_token:
-            logger.warning("No Twilio auth token provided - signature validation disabled")
+            logger.error("CRITICAL: No Twilio auth token provided - webhooks will be insecure!")
+        else:
+            logger.info("Twilio signature validation initialized successfully")
     
-    def validate_signature(self, url: str, post_vars: dict, signature: str) -> bool:
+    def validate_signature(self, url: str, post_vars: Dict[str, Any], signature: str) -> bool:
         """
-        Validate Twilio webhook signature.
+        Validate Twilio webhook signature using proper URL and parameter handling.
         
         Args:
             url: The full URL of the webhook
@@ -43,43 +48,63 @@ class TwilioSignatureValidator:
             True if signature is valid, False otherwise
         """
         if not self.auth_token:
-            logger.warning("Signature validation skipped - no auth token")
-            return True  # Allow in development
+            logger.error("Cannot validate signature - no auth token available")
+            return False
+        
+        if not signature:
+            logger.error("Cannot validate signature - no signature provided")
+            return False
         
         try:
-            # Sort parameters and create query string
-            sorted_vars = sorted(post_vars.items())
-            query_string = urlencode(sorted_vars)
+            # Ensure URL uses https in production
+            if self.railway_domain and self.railway_domain in url:
+                if not url.startswith('https://'):
+                    url = url.replace('http://', 'https://')
+                    logger.debug(f"Corrected URL to HTTPS: {url}")
             
-            # Create the signature base string
-            signature_base = url + query_string
+            # Sort parameters by key (Twilio requirement)
+            sorted_params = sorted(post_vars.items())
+            
+            # Build the signature string exactly as Twilio does
+            signature_string = url
+            for key, value in sorted_params:
+                # Handle both string and list values
+                if isinstance(value, list):
+                    value = value[0] if value else ""
+                signature_string += f"{key}{value}"
+            
+            logger.debug(f"Signature string (first 100 chars): {signature_string[:100]}...")
             
             # Compute HMAC-SHA1
-            expected_signature = hmac.new(
+            computed_signature = hmac.new(
                 self.auth_token.encode('utf-8'),
-                signature_base.encode('utf-8'),
+                signature_string.encode('utf-8'),
                 hashlib.sha1
             ).digest()
             
             # Base64 encode
-            expected_signature_b64 = base64.b64encode(expected_signature).decode('utf-8')
+            expected_signature = base64.b64encode(computed_signature).decode('utf-8')
             
-            # Compare signatures
-            is_valid = hmac.compare_digest(signature, expected_signature_b64)
+            # Compare signatures using constant-time comparison
+            is_valid = hmac.compare_digest(signature, expected_signature)
             
             if not is_valid:
                 logger.error(
-                    f"Invalid Twilio signature: url={url}, "
-                    f"expected={expected_signature_b64[:10]}..., "
-                    f"received={signature[:10] + '...' if signature else 'None'}"
+                    "Signature validation failed",
+                    extra={
+                        "url": url,
+                        "expected_signature": expected_signature[:20] + "...",
+                        "received_signature": signature[:20] + "...",
+                        "params_count": len(post_vars)
+                    }
                 )
             else:
-                logger.debug("Valid Twilio signature verified")
+                logger.info("Signature validation successful")
             
             return is_valid
             
         except Exception as e:
-            logger.error(f"Error validating Twilio signature: {e}")
+            logger.error(f"Error validating Twilio signature: {e}", exc_info=True)
             return False
 
 
@@ -87,49 +112,111 @@ class TwilioSignatureValidator:
 _validator = TwilioSignatureValidator()
 
 
-async def require_twilio_signature(request: Request) -> None:
+async def require_twilio_signature(request: Request) -> Dict[str, Any]:
     """
-    FastAPI dependency to validate Twilio webhook signatures.
+    FastAPI dependency to validate Twilio webhook signatures and return form data.
     
     Args:
         request: FastAPI request object
         
+    Returns:
+        Dictionary containing the validated form data
+        
     Raises:
         HTTPException: If signature validation fails
     """
-    # Skip validation for development
-    if os.getenv("ENVIRONMENT") == "development":
-        logger.debug("Skipping signature validation in development")
-        return
+    # In development with no auth token, log warning but allow
+    if _validator.environment == "development" and not _validator.auth_token:
+        logger.warning("Development mode with no auth token - allowing request")
+        try:
+            form_data = await request.form()
+            return dict(form_data)
+        except Exception as e:
+            logger.error(f"Error reading form data in dev mode: {e}")
+            raise HTTPException(status_code=400, detail="Invalid form data")
+    
+    # Production mode requires auth token
+    if not _validator.auth_token:
+        logger.error("Production deployment missing TWILIO_AUTH_TOKEN")
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error - missing auth token"
+        )
     
     # Get signature from headers
     signature = request.headers.get("X-Twilio-Signature")
     if not signature:
-        logger.error("Missing X-Twilio-Signature header")
+        logger.error("Missing X-Twilio-Signature header in webhook request")
         raise HTTPException(
             status_code=401,
-            detail="Missing Twilio signature"
+            detail="Missing Twilio signature header"
         )
     
-    # Get request URL
+    # Get the full URL exactly as Twilio sees it
     url = str(request.url)
     
-    # Get form data
+    # Handle Railway URL schemes properly
+    if _validator.railway_domain and _validator.railway_domain in url:
+        # Ensure HTTPS for Railway deployments
+        if url.startswith('http://'):
+            url = url.replace('http://', 'https://')
+    
+    # Parse form data
     try:
         form_data = await request.form()
-        post_vars = dict(form_data)
+        post_vars = {}
+        
+        # Handle multipart form data properly
+        for key, value in form_data.items():
+            if hasattr(value, 'read'):  # File upload
+                post_vars[key] = await value.read().decode('utf-8')
+            else:
+                post_vars[key] = str(value)
+        
+        logger.debug(f"Parsed {len(post_vars)} form parameters for signature validation")
+        
     except Exception as e:
-        logger.error(f"Error reading form data: {e}")
+        logger.error(f"Error parsing form data: {e}")
         raise HTTPException(
             status_code=400,
-            detail="Invalid form data"
+            detail="Invalid form data format"
         )
     
     # Validate signature
-    if not _validator.validate_signature(url, post_vars, signature):
+    try:
+        is_valid = _validator.validate_signature(url, post_vars, signature)
+        if not is_valid:
+            logger.error(
+                "Twilio signature validation failed",
+                extra={
+                    "url": url,
+                    "from": post_vars.get("From", "unknown"),
+                    "call_sid": post_vars.get("CallSid", "unknown")
+                }
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid Twilio signature"
+            )
+        
+        logger.info(
+            "Twilio webhook validated successfully",
+            extra={
+                "from": post_vars.get("From", "unknown"),
+                "call_sid": post_vars.get("CallSid", "unknown"),
+                "endpoint": request.url.path
+            }
+        )
+        
+        return post_vars
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during signature validation: {e}", exc_info=True)
         raise HTTPException(
-            status_code=401,
-            detail="Invalid Twilio signature"
+            status_code=500,
+            detail="Signature validation error"
         )
 
 
@@ -150,7 +237,7 @@ async def require_twilio_signature_optional(request: Request) -> bool:
         return False
 
 
-def validate_twilio_request_sync(url: str, post_vars: dict, signature: str) -> bool:
+def validate_twilio_request_sync(url: str, post_vars: Dict[str, Any], signature: str) -> bool:
     """
     Synchronous signature validation for non-FastAPI contexts.
     
@@ -165,67 +252,7 @@ def validate_twilio_request_sync(url: str, post_vars: dict, signature: str) -> b
     return _validator.validate_signature(url, post_vars, signature)
 
 
-class TwilioWebhookValidator:
-    """Enhanced webhook validator with additional security features."""
-    
-    def __init__(self, auth_token: Optional[str] = None):
-        self.validator = TwilioSignatureValidator(auth_token)
-        self.rate_limits = {}  # Simple in-memory rate limiting
-    
-    async def validate_webhook(self, request: Request) -> dict:
-        """
-        Comprehensive webhook validation with rate limiting.
-        
-        Args:
-            request: FastAPI request object
-            
-        Returns:
-            Dictionary with validation results and request data
-            
-        Raises:
-            HTTPException: If validation fails
-        """
-        client_ip = request.client.host if request.client else "unknown"
-        
-        # Basic rate limiting (simple implementation)
-        current_time = time.time()
-        if client_ip in self.rate_limits:
-            if current_time - self.rate_limits[client_ip] < 1:  # 1 second between requests
-                logger.warning(f"Rate limit exceeded for IP: {client_ip}")
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded"
-                )
-        self.rate_limits[client_ip] = current_time
-        
-        # Validate signature
-        await require_twilio_signature(request)
-        
-        # Get form data
-        form_data = await request.form()
-        request_data = dict(form_data)
-        
-        # Log webhook details
-        logger.info(
-            "Validated Twilio webhook",
-            client_ip=client_ip,
-            call_sid=request_data.get("CallSid", "unknown"),
-            from_number=request_data.get("From", "unknown")
-        )
-        
-        return {
-            "valid": True,
-            "client_ip": client_ip,
-            "data": request_data,
-            "timestamp": current_time
-        }
-
-
-# Enhanced validator instance
-webhook_validator = TwilioWebhookValidator()
-
-
-def create_signature_header(url: str, post_vars: dict, auth_token: str) -> str:
+def create_signature_header(url: str, post_vars: Dict[str, Any], auth_token: str) -> str:
     """
     Create Twilio signature for testing purposes.
     
@@ -237,23 +264,23 @@ def create_signature_header(url: str, post_vars: dict, auth_token: str) -> str:
     Returns:
         Base64-encoded signature
     """
-    # Sort parameters and create query string
-    sorted_vars = sorted(post_vars.items())
-    query_string = urlencode(sorted_vars)
+    # Sort parameters by key (Twilio requirement)
+    sorted_params = sorted(post_vars.items())
     
-    # Create the signature base string
-    signature_base = url + query_string
+    # Build the signature string exactly as Twilio does
+    signature_string = url
+    for key, value in sorted_params:
+        # Handle both string and list values
+        if isinstance(value, list):
+            value = value[0] if value else ""
+        signature_string += f"{key}{value}"
     
     # Compute HMAC-SHA1
     signature = hmac.new(
         auth_token.encode('utf-8'),
-        signature_base.encode('utf-8'),
+        signature_string.encode('utf-8'),
         hashlib.sha1
     ).digest()
     
     # Base64 encode
     return base64.b64encode(signature).decode('utf-8')
-
-
-# Import time for rate limiting
-import time
