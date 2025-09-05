@@ -273,51 +273,20 @@ async def process_speech(
         
         # Check for emergency first
         if any(keyword in speech_lower for keyword in emergency_keywords):
-            response = """This sounds like an emergency! Please hang up immediately and either:
-            
-            Call your nearest emergency veterinary clinic right away, or bring your pet there directly.
-            
-            If it's after hours, search for "emergency vet near me" or "24 hour animal hospital".
-            
-            Time is critical in emergencies. Please get professional help immediately!"""
+            response = "This sounds like an emergency! Please hang up immediately and call your nearest emergency veterinary clinic right away, or bring your pet there directly. Time is critical in emergencies!"
             
         elif any(keyword in speech_lower for keyword in appointment_keywords):
-            response = """Perfect! I'd be happy to help you schedule an appointment for your pet.
-            
-            Our booking team will call you back within 10 minutes to:
-            - Check our available appointment times
-            - Discuss what type of visit your pet needs
-            - Confirm all the details with you
-            
-            Thank you for choosing AI Veterinary Clinic for your pet's care!"""
+            response = "Perfect! I'd be happy to help you schedule an appointment for your pet. Our booking team will call you back within 10 minutes to check available times and confirm the details. Thank you for choosing AI Veterinary Clinic!"
             
         elif any(keyword in speech_lower for keyword in health_keywords):
-            response = """I understand you have concerns about your pet's health. That's exactly what we're here for!
-            
-            Our experienced veterinary team will call you back within 10 minutes to:
-            - Discuss your pet's symptoms in detail
-            - Provide initial guidance
-            - Determine if your pet needs to be seen urgently
-            
-            Thank you for being attentive to your pet's health!"""
+            response = "I understand you have concerns about your pet's health. Our experienced veterinary team will call you back within 10 minutes to discuss your pet's symptoms and determine if urgent care is needed. Thank you for being attentive to your pet's health!"
             
         elif any(keyword in speech_lower for keyword in prescription_keywords):
-            response = """Of course! I can help you with prescription and medication needs.
-            
-            Our pharmacy team will call you back within 10 minutes to:
-            - Check your pet's prescription status
-            - Process any refills needed
-            - Answer medication questions
-            
-            Thank you for staying on top of your pet's medication needs!"""
+            response = "Of course! I can help you with prescription and medication needs. Our pharmacy team will call you back within 10 minutes to check your pet's prescription status and process any refills needed."
             
         else:
-            # General inquiry - intelligent fallback
-            response = f"""Thank you for calling AI Veterinary Clinic! I heard you mention: "{SpeechResult}"
-            
-            Our knowledgeable team will call you back within 10 minutes to help with whatever you need.
-            
-            We're here to provide the best possible care for your pet!"""
+            # General inquiry - intelligent fallback  
+            response = f"Thank you for calling AI Veterinary Clinic! I heard you say '{SpeechResult}'. Our knowledgeable team will call you back within 10 minutes to help with whatever you need."
         
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
