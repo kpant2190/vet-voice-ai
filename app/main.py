@@ -32,20 +32,12 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Add comprehensive request logging middleware
+# Add minimal request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    print(f"🔥 INCOMING REQUEST: {request.method} {request.url}")
-    print(f"🔥 Headers: {dict(request.headers)}")
-    print(f"🔥 Client: {request.client}")
-    
-    # Try to read body for POST requests
-    if request.method == "POST":
-        body = await request.body()
-        print(f"🔥 Body: {body.decode('utf-8', errors='ignore')}")
-    
+    print(f"� {request.method} {request.url.path}")
     response = await call_next(request)
-    print(f"🔥 Response status: {response.status_code}")
+    print(f"✅ Response: {response.status_code}")
     return response
 
 # Add CORS middleware
@@ -195,10 +187,10 @@ async def voice_conversation():
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     {greeting_tag}
-    <Gather input="speech" action="/speech-handler" method="POST" speechTimeout="6" timeout="18" language="en-AU" enhanced="true">
+    <Gather input="speech" action="/speech" method="POST" speechTimeout="6" timeout="18" language="en-AU" enhanced="true">
         {prompt_tag}
     </Gather>
-    <Redirect>/speech-handler</Redirect>
+    <Redirect>/speech</Redirect>
 </Response>'''
         return Response(content=twiml, media_type="application/xml")
     except Exception as e:
@@ -217,7 +209,7 @@ async def voice_conversation_retry():
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="Polly.Joanna">I didn't catch that. Could you please tell me briefly what you need help with?</Say>
-    <Gather input="speech" action="/speech-handler" method="POST" speechTimeout="4" timeout="10" language="en-AU" enhanced="true">
+    <Gather input="speech" action="/speech" method="POST" speechTimeout="4" timeout="10" language="en-AU" enhanced="true">
         <Say voice="Polly.Joanna">For example, say appointment, emergency, or health question.</Say>
     </Gather>
     <Say voice="Polly.Joanna">I'm having trouble hearing you. Our team will call you back within 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!</Say>
@@ -229,6 +221,25 @@ async def voice_conversation_retry():
             content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thank you for calling!</Say><Hangup/></Response>',
             media_type="application/xml"
         )
+
+# ULTRA-MINIMAL SPEECH ENDPOINT - CANNOT FAIL
+@app.post("/speech")
+@app.get("/speech")
+async def speech(SpeechResult: str = Form(None)):
+    """Ultra-minimal speech endpoint that cannot possibly timeout."""
+    if SpeechResult and "emergency" in SpeechResult.lower():
+        msg = "Emergency! Call your nearest emergency vet immediately!"
+    elif SpeechResult and "appointment" in SpeechResult.lower():
+        msg = "Perfect! Our team will call you back in 10 minutes to book your appointment."
+    elif SpeechResult:
+        msg = "Thank you! Our team will call you back in 10 minutes."
+    else:
+        msg = "Thank you for calling!"
+    
+    return Response(
+        content=f'<Response><Say voice="Polly.Joanna">{msg}</Say><Hangup/></Response>',
+        media_type="application/xml"
+    )
 
 # BULLETPROOF SPEECH PROCESSING - GUARANTEED TO WORK
 @app.post("/speech-handler")
