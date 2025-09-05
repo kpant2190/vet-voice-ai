@@ -178,17 +178,27 @@ async def ultra_simple_webhook():
 @app.post("/voice-conversation")
 @app.get("/voice-conversation")
 async def voice_conversation():
-    """Enhanced conversational AI webhook with intelligent responses."""
+    """Enhanced conversational AI webhook with best possible voice quality."""
     try:
         print(f"🎤 Enhanced voice conversation started at {time.time()}")
         
-        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+        # Try to use ElevenLabs for greeting
+        try:
+            from .services.elevenlabs_service import get_best_voice_say_tag
+            greeting_tag = get_best_voice_say_tag("Hello! You've reached AI Veterinary Clinic. I'm your AI assistant, and I'm here to help you and your pet. How can I assist you today?")
+            prompt_tag = get_best_voice_say_tag("Please tell me what you need help with, such as booking an appointment, asking about your pet's health, or if this is an emergency.")
+        except:
+            # Fallback to Polly
+            greeting_tag = '<Say voice="Polly.Joanna">Hello! You\'ve reached AI Veterinary Clinic. I\'m your AI assistant, and I\'m here to help you and your pet. How can I assist you today?</Say>'
+            prompt_tag = '<Say voice="Polly.Joanna">Please tell me what you need help with, such as booking an appointment, asking about your pet\'s health, or if this is an emergency.</Say>'
+        
+        twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Joanna">Hello! You've reached AI Veterinary Clinic. I'm your AI assistant, and I'm here to help you and your pet. How can I assist you today?</Say>
-    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="8" timeout="20" language="en-AU" enhanced="true">
-        <Say voice="Polly.Joanna">Please tell me what you need help with, such as booking an appointment, asking about your pet's health, or if this is an emergency.</Say>
+    {greeting_tag}
+    <Gather input="speech" action="/speech-handler" method="POST" speechTimeout="6" timeout="18" language="en-AU" enhanced="true">
+        {prompt_tag}
     </Gather>
-    <Redirect>/voice-conversation-retry</Redirect>
+    <Redirect>/speech-handler</Redirect>
 </Response>'''
         return Response(content=twiml, media_type="application/xml")
     except Exception as e:
@@ -207,7 +217,7 @@ async def voice_conversation_retry():
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="Polly.Joanna">I didn't catch that. Could you please tell me briefly what you need help with?</Say>
-    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="5" timeout="12" language="en-AU" enhanced="true">
+    <Gather input="speech" action="/speech-handler" method="POST" speechTimeout="4" timeout="10" language="en-AU" enhanced="true">
         <Say voice="Polly.Joanna">For example, say appointment, emergency, or health question.</Say>
     </Gather>
     <Say voice="Polly.Joanna">I'm having trouble hearing you. Our team will call you back within 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!</Say>
@@ -220,16 +230,41 @@ async def voice_conversation_retry():
             media_type="application/xml"
         )
 
-# SIMPLE SPEECH PROCESSING - GUARANTEED TO WORK
-@app.post("/process-speech")
-@app.get("/process-speech") 
-async def handle_speech(SpeechResult: str = Form(None), CallSid: str = Form(None)):
-    """Super simple speech handler."""
-    response_text = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes."
-    return Response(
-        content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">{response_text}</Say><Hangup/></Response>',
-        media_type="application/xml"
-    )
+# BULLETPROOF SPEECH PROCESSING - GUARANTEED TO WORK
+@app.post("/speech-handler")
+@app.get("/speech-handler")
+async def speech_handler(SpeechResult: str = Form(None)):
+    """Ultra-reliable speech handler with best possible voice quality."""
+    try:
+        # Import the voice service
+        from .services.elevenlabs_service import get_best_voice_say_tag
+        
+        # Determine response based on speech
+        if SpeechResult and "emergency" in SpeechResult.lower():
+            msg = "Emergency detected! Please call your nearest emergency vet immediately!"
+        elif SpeechResult and "appointment" in SpeechResult.lower():
+            msg = "Perfect! Our team will call you back in 10 minutes to book your appointment."
+        elif SpeechResult and "sick" in SpeechResult.lower():
+            msg = "I understand your pet isn't feeling well. Our vet will call you back in 10 minutes."
+        elif SpeechResult:
+            msg = "Thank you! Our team will call you back in 10 minutes to help you."
+        else:
+            msg = "Thank you for calling AI Veterinary Clinic!"
+        
+        # Get best possible voice tag
+        voice_tag = get_best_voice_say_tag(msg)
+        
+        return Response(
+            content=f'<?xml version="1.0"?><Response>{voice_tag}<Hangup/></Response>',
+            media_type="application/xml"
+        )
+    except Exception as e:
+        print(f"❌ Speech handler error: {e}")
+        # Ultra-safe fallback
+        return Response(
+            content='<?xml version="1.0"?><Response><Say voice="Polly.Joanna">Thank you for calling!</Say><Hangup/></Response>',
+            media_type="application/xml"
+        )
 
 @app.post("/partial-result")
 async def partial_result(
