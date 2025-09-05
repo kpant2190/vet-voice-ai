@@ -187,12 +187,12 @@ async def voice_conversation():
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     {greeting_tag}
-    <Gather input="speech" action="/speech" method="POST" speechTimeout="2" timeout="8" language="en-US" hints="appointment,emergency,sick,help">
+    <Gather input="speech" action="/speech" method="POST" speechTimeout="1" timeout="4" language="en-US" hints="appointment,emergency,sick,help" partialResultCallback="/partial">
         {prompt_tag}
     </Gather>
-    <Say voice="Polly.Joanna">I didn't hear anything. Let me try a different approach.</Say>
-    <Gather input="speech dtmf" action="/speech" method="POST" speechTimeout="1" timeout="6" language="en-US">
-        <Say voice="Polly.Joanna">Please speak now, or press 1 for appointment, 2 for emergency, or 3 for health question.</Say>
+    <Say voice="Polly.Joanna">Let me try again with a faster response.</Say>
+    <Gather input="speech dtmf" action="/speech" method="POST" speechTimeout="0.5" timeout="3" language="en-US">
+        <Say voice="Polly.Joanna">Please speak quickly, or press 1 for appointment, 2 for emergency, or 3 for health question.</Say>
     </Gather>
     <Redirect>/speech</Redirect>
 </Response>'''
@@ -226,51 +226,42 @@ async def voice_conversation_retry():
             media_type="application/xml"
         )
 
-# ULTRA-MINIMAL SPEECH ENDPOINT - CANNOT FAIL
+# ULTRA-FAST SPEECH ENDPOINT - OPTIMIZED FOR SPEED
 @app.post("/speech")
 @app.get("/speech")
 async def speech(SpeechResult: str = Form(None), Digits: str = Form(None), CallSid: str = Form(None)):
-    """Ultra-minimal speech endpoint with DTMF backup and debugging."""
+    """Ultra-fast speech endpoint optimized for minimal latency."""
     
-    # Log everything for debugging
-    print(f"🎤 SPEECH ENDPOINT CALLED:")
-    print(f"   SpeechResult: '{SpeechResult}'")
-    print(f"   Digits: '{Digits}'")
-    print(f"   CallSid: '{CallSid}'")
-    
-    # Handle DTMF input (keypad presses) - WORKING
+    # Fast DTMF handling (already working)
     if Digits:
-        print(f"📱 DTMF Input detected: {Digits}")
         if Digits == "1":
-            msg = "Perfect! You pressed 1 for appointment. Our team will call you back in 10 minutes to book your appointment."
+            msg = "Booking appointment. Team calling back in 10 minutes."
         elif Digits == "2":
-            msg = "You pressed 2 for emergency. Please hang up and call your nearest emergency vet immediately!"
+            msg = "Emergency! Call your nearest emergency vet now!"
         elif Digits == "3":
-            msg = "You pressed 3 for health question. Our vet team will call you back in 10 minutes to discuss your pet's health."
+            msg = "Health question noted. Vet calling back in 10 minutes."
         else:
-            msg = "Thank you for calling! Our team will call you back in 10 minutes."
+            msg = "Thank you. Team calling back in 10 minutes."
     
-    # Handle speech input - NEEDS FIXING
+    # Ultra-fast speech processing - optimized for speed
     elif SpeechResult and SpeechResult.strip():
-        print(f"🗣️ SPEECH Input detected: '{SpeechResult}'")
-        speech_lower = SpeechResult.lower().strip()
+        speech = SpeechResult.lower()
         
-        if "emergency" in speech_lower or "urgent" in speech_lower:
-            msg = f"Emergency detected! I heard you say '{SpeechResult}'. Please call your nearest emergency vet immediately!"
-        elif "appointment" in speech_lower or "book" in speech_lower or "schedule" in speech_lower:
-            msg = f"Perfect! I heard you say '{SpeechResult}'. Our team will call you back in 10 minutes to book your appointment."
-        elif "sick" in speech_lower or "ill" in speech_lower or "health" in speech_lower:
-            msg = f"I understand your pet needs attention. I heard you say '{SpeechResult}'. Our vet will call you back in 10 minutes."
+        # Fast keyword matching - single word checks
+        if "emergency" in speech:
+            msg = "Emergency detected! Call emergency vet immediately!"
+        elif "appointment" in speech:
+            msg = "Appointment request received. Calling back in 10 minutes."
+        elif "sick" in speech:
+            msg = "Pet health concern noted. Vet calling back in 10 minutes."
         else:
-            msg = f"Thank you for calling! I heard you say '{SpeechResult}'. Our team will call you back in 10 minutes to help you."
+            msg = "Request received. Team calling back in 10 minutes."
     
-    # No input detected - FALLBACK
+    # Fast fallback
     else:
-        print("❌ NO INPUT detected - SpeechResult and Digits both empty/None")
-        msg = "I didn't hear anything clearly. Our team will call you back in 10 minutes to assist you. Thank you for calling AI Veterinary Clinic!"
+        msg = "Thank you for calling. Team calling back in 10 minutes."
     
-    print(f"📞 Responding with: {msg[:50]}...")
-    
+    # Return immediately - no processing delays
     return Response(
         content=f'<Response><Say voice="Polly.Joanna">{msg}</Say><Hangup/></Response>',
         media_type="application/xml"
@@ -282,14 +273,56 @@ async def partial_speech_callback(
     UnstableSpeechResult: str = Form(None),
     StableSpeechResult: str = Form(None)
 ):
-    """Handle partial speech results to improve recognition."""
-    print(f"🎤 Partial speech - Stable: '{StableSpeechResult}', Unstable: '{UnstableSpeechResult}'")
+    """Handle partial speech results for instant feedback."""
+    # Check if we have enough stable speech to respond immediately
+    if StableSpeechResult and len(StableSpeechResult.strip()) > 3:
+        stable = StableSpeechResult.lower()
+        
+        # Instant response for emergencies
+        if "emergency" in stable or "urgent" in stable:
+            return Response(
+                content='<Response><Say voice="Polly.Joanna">Emergency! Call your nearest emergency vet now!</Say><Hangup/></Response>',
+                media_type="application/xml"
+            )
+        
+        # Instant response for appointments
+        if "appointment" in stable or "book" in stable:
+            return Response(
+                content='<Response><Say voice="Polly.Joanna">Appointment request received! Calling back in 10 minutes.</Say><Hangup/></Response>',
+                media_type="application/xml"
+            )
     
-    # Return empty response to continue gathering
+    # Continue gathering if not enough info
     return Response(
         content='<Response></Response>',
         media_type="application/xml"
     )
+
+# SUPER-FAST EXPRESS ENDPOINT FOR INSTANT RESPONSES
+@app.post("/express")
+@app.get("/express")
+async def express_speech(SpeechResult: str = Form(None), Digits: str = Form(None)):
+    """Express endpoint for lightning-fast responses."""
+    # Instant DTMF response
+    if Digits == "1":
+        return Response(content='<Response><Say voice="Polly.Joanna">Appointment noted. Calling back shortly.</Say><Hangup/></Response>', media_type="application/xml")
+    elif Digits == "2":
+        return Response(content='<Response><Say voice="Polly.Joanna">Emergency! Call emergency vet now!</Say><Hangup/></Response>', media_type="application/xml")
+    elif Digits == "3":
+        return Response(content='<Response><Say voice="Polly.Joanna">Health question noted. Calling back shortly.</Say><Hangup/></Response>', media_type="application/xml")
+    
+    # Instant speech response
+    if SpeechResult:
+        s = SpeechResult.lower()
+        if "emergency" in s:
+            return Response(content='<Response><Say voice="Polly.Joanna">Emergency! Call emergency vet immediately!</Say><Hangup/></Response>', media_type="application/xml")
+        elif "appointment" in s:
+            return Response(content='<Response><Say voice="Polly.Joanna">Appointment request noted. Calling back in 10 minutes.</Say><Hangup/></Response>', media_type="application/xml")
+        else:
+            return Response(content='<Response><Say voice="Polly.Joanna">Request received. Calling back in 10 minutes.</Say><Hangup/></Response>', media_type="application/xml")
+    
+    # Default
+    return Response(content='<Response><Say voice="Polly.Joanna">Thank you for calling.</Say><Hangup/></Response>', media_type="application/xml")
 
 # SPEECH TEST ENDPOINT
 @app.post("/speech-test")
