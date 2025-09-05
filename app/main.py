@@ -220,50 +220,16 @@ async def voice_conversation_retry():
             media_type="application/xml"
         )
 
+# SIMPLE SPEECH PROCESSING - GUARANTEED TO WORK
 @app.post("/process-speech")
-async def process_speech(
-    SpeechResult: str = Form(None),
-    CallSid: str = Form(None),
-    From: str = Form(None),
-    Confidence: str = Form(None)
-):
-    """Process speech with intelligent keyword detection and responses."""
-    try:
-        print(f"🎤 Speech processing: '{SpeechResult}' (confidence: {Confidence})")
-        
-        # Default response
-        response = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you."
-        
-        if SpeechResult:
-            speech_lower = SpeechResult.lower()
-            
-            # Simple keyword checks
-            if "emergency" in speech_lower or "urgent" in speech_lower or "bleeding" in speech_lower:
-                response = "This sounds like an emergency! Please hang up immediately and call your nearest emergency veterinary clinic right away. Time is critical!"
-            elif "appointment" in speech_lower or "schedule" in speech_lower or "book" in speech_lower:
-                response = "Perfect! I'd be happy to help you schedule an appointment. Our booking team will call you back within 10 minutes to check available times."
-            elif "sick" in speech_lower or "ill" in speech_lower or "health" in speech_lower:
-                response = "I understand you have concerns about your pet's health. Our veterinary team will call you back within 10 minutes to discuss your pet's symptoms."
-            elif "prescription" in speech_lower or "medication" in speech_lower or "refill" in speech_lower:
-                response = "Of course! Our pharmacy team will call you back within 10 minutes to help with your pet's prescription needs."
-        
-        twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice">{response}</Say>
-    <Hangup/>
-</Response>'''
-        
-        return Response(content=twiml, media_type="application/xml")
-        
-    except Exception as e:
-        print(f"❌ Speech processing error: {e}")
-        # Ultra-safe fallback
-        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice">Thank you for calling AI Veterinary Clinic!</Say>
-    <Hangup/>
-</Response>'''
-        return Response(content=twiml, media_type="application/xml")
+@app.get("/process-speech") 
+async def handle_speech(SpeechResult: str = Form(None), CallSid: str = Form(None)):
+    """Super simple speech handler."""
+    response_text = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes."
+    return Response(
+        content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">{response_text}</Say><Hangup/></Response>',
+        media_type="application/xml"
+    )
 
 @app.post("/partial-result")
 async def partial_result(
