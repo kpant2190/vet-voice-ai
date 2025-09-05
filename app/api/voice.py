@@ -56,34 +56,37 @@ async def voice_webhook(
             
             # Try to log to database asynchronously (don't wait for it)
             try:
-                from ..core.database import get_db
-                db = next(get_db())
-                
-                # Quick clinic check
-                clinic = db.query(Clinic).filter(Clinic.phone_number == To).first()
-                if not clinic:
-                    # Create a default clinic entry for this number
-                    clinic = Clinic(
-                        name="AI Veterinary Clinic",
-                        phone_number=To,
-                        email="contact@aivet.com",
-                        voice_greeting=greeting
+                from ..core.database import SessionLocal
+                if SessionLocal:
+                    db = SessionLocal()
+                    
+                    # Quick clinic check
+                    clinic = db.query(Clinic).filter(Clinic.phone_number == To).first()
+                    if not clinic:
+                        # Create a default clinic entry for this number
+                        clinic = Clinic(
+                            name="AI Veterinary Clinic",
+                            phone_number=To,
+                            email="contact@aivet.com",
+                            voice_greeting=greeting
+                        )
+                        db.add(clinic)
+                        db.commit()
+                    
+                    # Quick call log entry
+                    call_log = CallLog(
+                        clinic_id=clinic.id,
+                        twilio_call_sid=CallSid,
+                        caller_phone=From,
+                        call_status=CallStatus,
+                        call_direction="inbound",
+                        call_started_at=datetime.utcnow()
                     )
-                    db.add(clinic)
+                    db.add(call_log)
                     db.commit()
-                
-                # Quick call log entry
-                call_log = CallLog(
-                    clinic_id=clinic.id,
-                    twilio_call_sid=CallSid,
-                    caller_phone=From,
-                    call_status=CallStatus,
-                    call_direction="inbound",
-                    call_started_at=datetime.utcnow()
-                )
-                db.add(call_log)
-                db.commit()
-                db.close()
+                    db.close()
+                else:
+                    print("⚠️ Database not available - skipping logging")
                 
             except Exception as db_error:
                 print(f"⚠️ Database logging failed (continuing anyway): {db_error}")

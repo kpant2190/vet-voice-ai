@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, Response
 import uvicorn
 
 from .core.config import settings
-from .core.database import create_tables
+from .core.database import initialize_database, create_tables, engine
 from .api.voice import router as voice_router
 from .api.sms import router as sms_router
 from .api.appointments import router as appointments_router
@@ -90,30 +90,31 @@ async def health_check():
 async def health():
     """Enhanced health check endpoint with database connectivity."""
     try:
-        # Quick database connection test
-        from .core.database import engine
-        if engine:
-            with engine.connect() as conn:
-                # Simple query to test connection
-                result = conn.execute("SELECT 1")
-                result.fetchone()
-            
-            return {
-                "status": "ok", 
-                "message": "Service is running",
-                "database": "connected",
-                "timestamp": "2025-09-04T07:06:00Z"
-            }
-        else:
+        # Check if database is initialized
+        if engine is None:
             return {
                 "status": "degraded",
-                "message": "Service running but database unavailable",
-                "database": "disconnected"
+                "message": "Service running but database not initialized",
+                "database": "not_initialized"
             }
+        
+        # Quick database connection test
+        with engine.connect() as conn:
+            # Simple query to test connection
+            from sqlalchemy import text
+            result = conn.execute(text("SELECT 1"))
+            result.fetchone()
+        
+        return {
+            "status": "ok", 
+            "message": "Service is running",
+            "database": "connected",
+            "database_host": settings.DATABASE_URL.split('@')[1].split('/')[0] if '@' in settings.DATABASE_URL else 'localhost'
+        }
     except Exception as e:
         return {
             "status": "degraded",
-            "message": "Service running with issues",
+            "message": "Service running with database issues",
             "database": f"error: {str(e)}"
         }
 
@@ -158,19 +159,26 @@ async def ultra_simple_webhook():
 
 @app.on_event("startup")
 async def startup_event():
-    """Application startup event."""
-    try:
-        # Create database tables
-        create_tables()
-        print(f"✅ Database tables created successfully!")
-    except Exception as e:
-        print(f"⚠️  Warning: Could not create database tables: {e}")
-        print("🔄 Application will continue without database initialization...")
-        print("📝 Please check your DATABASE_URL environment variable")
+    """Application startup event with proper database initialization."""
+    print(f"🚀 Starting {settings.PROJECT_NAME}...")
     
-    print(f"🚀 {settings.PROJECT_NAME} started successfully!")
-    print(f"📊 API Documentation: http://localhost:8000/docs")
-    print(f"🔗 Twilio Webhook URL: http://your-domain.com{settings.API_V1_STR}/voice/webhook")
+    # Initialize database connection
+    db_success = initialize_database()
+    
+    if db_success:
+        # Create database tables
+        tables_created = create_tables()
+        if tables_created:
+            print(f"✅ Database initialized successfully!")
+        else:
+            print(f"⚠️ Database connected but table creation failed")
+    else:
+        print(f"⚠️ Database initialization failed - app will run in degraded mode")
+        print(f"📝 Check DATABASE_URL: {settings.DATABASE_URL[:50]}...")
+    
+    print(f"🚀 {settings.PROJECT_NAME} startup complete!")
+    print(f"📊 API Documentation: http://localhost:{settings.PORT}/docs")
+    print(f"🔗 Twilio Webhook URL: https://your-railway-domain.com{settings.API_V1_STR}/voice/webhook")
 
 
 @app.get("/")
@@ -185,14 +193,8 @@ async def root():
     }
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",  # In production, use real timestamp
-        "version": "1.0.0"
-    }
+# Remove duplicate health endpoint - keeping only the enhanced one above
+# Lines 180-186 removed to prevent conflicts
 
 
 @app.exception_handler(Exception)
