@@ -231,62 +231,21 @@ async def process_speech(
     try:
         print(f"🎤 Speech processing: '{SpeechResult}' (confidence: {Confidence})")
         
-        if not SpeechResult:
-            # No speech detected - provide helpful fallback
-            twiml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice">I didn't hear anything. Our friendly team will call you back within 10 minutes to help you. Thank you for calling AI Veterinary Clinic!</Say>
-    <Hangup/>
-</Response>'''
-            return Response(content=twiml, media_type="application/xml")
+        # Default response
+        response = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you."
         
-        speech_lower = SpeechResult.lower()
-        
-        # Emergency keywords - highest priority
-        emergency_keywords = [
-            "emergency", "urgent", "dying", "bleeding", "poison", "toxic", 
-            "can't breathe", "breathing", "seizure", "unconscious", "hit by car",
-            "vomiting blood", "blood", "collapsed", "choking", "swallowed",
-            "broken bone", "accident", "trauma", "critical"
-        ]
-        
-        # Appointment keywords
-        appointment_keywords = [
-            "appointment", "schedule", "book", "booking", "visit", "checkup",
-            "check up", "routine", "vaccination", "vaccine", "shots", "spay",
-            "neuter", "dental", "cleaning", "surgery", "consult", "see doctor"
-        ]
-        
-        # Health concern keywords
-        health_keywords = [
-            "sick", "ill", "not eating", "vomiting", "diarrhea", "limping",
-            "cough", "scratching", "itchy", "rash", "lethargic", "tired",
-            "weight loss", "drinking", "urinating", "behavior", "aggressive",
-            "pain", "hurt", "sore", "swollen", "lump", "bump"
-        ]
-        
-        # Prescription/medication keywords
-        prescription_keywords = [
-            "prescription", "medication", "medicine", "pills", "refill",
-            "antibiotics", "pain relief", "flea", "tick", "heartworm"
-        ]
-        
-        # Check for emergency first
-        if any(keyword in speech_lower for keyword in emergency_keywords):
-            response = "This sounds like an emergency! Please hang up immediately and call your nearest emergency veterinary clinic right away, or bring your pet there directly. Time is critical in emergencies!"
+        if SpeechResult:
+            speech_lower = SpeechResult.lower()
             
-        elif any(keyword in speech_lower for keyword in appointment_keywords):
-            response = "Perfect! I'd be happy to help you schedule an appointment for your pet. Our booking team will call you back within 10 minutes to check available times and confirm the details. Thank you for choosing AI Veterinary Clinic!"
-            
-        elif any(keyword in speech_lower for keyword in health_keywords):
-            response = "I understand you have concerns about your pet's health. Our experienced veterinary team will call you back within 10 minutes to discuss your pet's symptoms and determine if urgent care is needed. Thank you for being attentive to your pet's health!"
-            
-        elif any(keyword in speech_lower for keyword in prescription_keywords):
-            response = "Of course! I can help you with prescription and medication needs. Our pharmacy team will call you back within 10 minutes to check your pet's prescription status and process any refills needed."
-            
-        else:
-            # General inquiry - intelligent fallback  
-            response = f"Thank you for calling AI Veterinary Clinic! I heard you say '{SpeechResult}'. Our knowledgeable team will call you back within 10 minutes to help with whatever you need."
+            # Simple keyword checks
+            if "emergency" in speech_lower or "urgent" in speech_lower or "bleeding" in speech_lower:
+                response = "This sounds like an emergency! Please hang up immediately and call your nearest emergency veterinary clinic right away. Time is critical!"
+            elif "appointment" in speech_lower or "schedule" in speech_lower or "book" in speech_lower:
+                response = "Perfect! I'd be happy to help you schedule an appointment. Our booking team will call you back within 10 minutes to check available times."
+            elif "sick" in speech_lower or "ill" in speech_lower or "health" in speech_lower:
+                response = "I understand you have concerns about your pet's health. Our veterinary team will call you back within 10 minutes to discuss your pet's symptoms."
+            elif "prescription" in speech_lower or "medication" in speech_lower or "refill" in speech_lower:
+                response = "Of course! Our pharmacy team will call you back within 10 minutes to help with your pet's prescription needs."
         
         twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -298,10 +257,10 @@ async def process_speech(
         
     except Exception as e:
         print(f"❌ Speech processing error: {e}")
-        # Safe fallback
+        # Ultra-safe fallback
         twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="alice">Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you.</Say>
+    <Say voice="alice">Thank you for calling AI Veterinary Clinic!</Say>
     <Hangup/>
 </Response>'''
         return Response(content=twiml, media_type="application/xml")
