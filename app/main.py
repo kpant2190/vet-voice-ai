@@ -3,6 +3,7 @@
 # Railway startup check
 import os
 import sys
+import time
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 try:
     import railway_startup_check
@@ -95,28 +96,28 @@ async def health_check():
 
 @app.get("/health")
 async def health():
-    """Enhanced health check endpoint with database connectivity."""
+    """Enhanced health check endpoint with Railway database support."""
     try:
-        # Check if database is initialized
-        if engine is None:
-            return {
-                "status": "degraded",
-                "message": "Service running but database not initialized",
-                "database": "not_initialized"
-            }
+        # Use the new health check function from database module
+        from .core.database import check_database_health
         
-        # Quick database connection test
-        with engine.connect() as conn:
-            # Simple query to test connection
-            from sqlalchemy import text
-            result = conn.execute(text("SELECT 1"))
-            result.fetchone()
+        health_result = check_database_health()
         
+        # Add additional service information
+        health_result.update({
+            "service": "AI Veterinary Receptionist",
+            "version": "1.0.0",
+            "railway_deployment": True
+        })
+        
+        return health_result
+        
+    except Exception as e:
         return {
-            "status": "ok", 
-            "message": "Service is running",
-            "database": "connected",
-            "database_host": settings.DATABASE_URL.split('@')[1].split('/')[0] if '@' in settings.DATABASE_URL else 'localhost'
+            "status": "error",
+            "message": f"Health check failed: {str(e)}",
+            "database": "unknown",
+            "service": "AI Veterinary Receptionist"
         }
     except Exception as e:
         return {
@@ -156,13 +157,80 @@ async def test_webhook_get():
 @app.post("/simple")
 @app.get("/simple")
 async def ultra_simple_webhook():
-    """Ultra-simple webhook with minimal processing"""
-    twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+    """Ultra-simple webhook with minimal processing - guaranteed to work."""
+    try:
+        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="alice">Hello! You have reached AI Veterinary Clinic. This call is working correctly. Thank you for calling!</Say>
     <Hangup/>
 </Response>'''
-    return Response(content=twiml, media_type="application/xml")
+        return Response(content=twiml, media_type="application/xml")
+    except Exception as e:
+        # Emergency fallback - should never fail
+        emergency_twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say>Hello! Thank you for calling AI Veterinary Clinic. Please call back later.</Say>
+    <Hangup/>
+</Response>'''
+        return Response(content=emergency_twiml, media_type="application/xml")
+
+# Database-independent webhook for Railway
+@app.post("/railway-webhook")
+@app.get("/railway-webhook")
+async def railway_webhook():
+    """Railway-optimized webhook that works without database."""
+    try:
+        # Log the call for debugging
+        print(f"Railway webhook called at {time.time()}")
+        
+        twiml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Hello! You have reached AI Veterinary Clinic. We are an AI-powered veterinary receptionist. How can we help you and your pet today?</Say>
+    <Gather input="speech" action="/simple-response" method="POST" speechTimeout="3" timeout="10">
+        <Say voice="alice">Please tell us what you need help with.</Say>
+    </Gather>
+    <Say voice="alice">We didn't hear anything. Please call back if you need assistance. Thank you!</Say>
+    <Hangup/>
+</Response>'''
+        return Response(content=twiml, media_type="application/xml")
+    except Exception as e:
+        # Ultra-safe fallback
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling!</Say><Hangup/></Response>',
+            media_type="application/xml"
+        )
+
+@app.post("/simple-response")
+async def simple_response(SpeechResult: str = Form(None)):
+    """Handle simple speech responses without database."""
+    try:
+        import time
+        print(f"Speech received: {SpeechResult} at {time.time()}")
+        
+        if SpeechResult:
+            speech_lower = SpeechResult.lower()
+            
+            if any(word in speech_lower for word in ["emergency", "urgent", "dying", "bleeding"]):
+                response = "This sounds like an emergency! Please hang up and call emergency services or visit the nearest emergency veterinary clinic immediately!"
+            elif any(word in speech_lower for word in ["appointment", "schedule", "book"]):
+                response = "I'd be happy to help you schedule an appointment! Our staff will call you back within 10 minutes to book that for you."
+            else:
+                response = "Thank you for calling AI Veterinary Clinic! Our team will call you back within 10 minutes to assist you."
+        else:
+            response = "Thank you for calling AI Veterinary Clinic!"
+        
+        twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">{response}</Say>
+    <Hangup/>
+</Response>'''
+        return Response(content=twiml, media_type="application/xml")
+        
+    except Exception as e:
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling!</Say><Hangup/></Response>',
+            media_type="application/xml"
+        )
 
 
 @app.on_event("startup")
